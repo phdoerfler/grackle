@@ -20,21 +20,22 @@ import java.sql.{Time, Timestamp}
 import java.time.{LocalDate, LocalTime, OffsetDateTime, ZoneId}
 import java.util.UUID
 import scala.util.Try
-
-import cats.effect.{Resource, Sync, IO}
-import cats.syntax.all._
+import cats.effect.{IO, Resource, Sync}
+import cats.syntax.all.*
 import doobie.{Meta, Transactor}
 import doobie.enumerated.JdbcType
+import doobie.implicits.toSqlInterpolator
 import doobie.util.meta.MetaConstructors.Basic
-import io.circe.{Decoder => CDecoder, Encoder => CEncoder, Json}
-import io.circe.syntax._
+import io.circe.{Json, Decoder as CDecoder, Encoder as CEncoder}
+import io.circe.syntax.*
 import io.circe.parser.parse
-import munit.catseffect._
-
+import munit.catseffect.*
 import grackle.doobie.DoobieMonitor
 import grackle.doobie.test.DoobieDatabaseSuite
+import grackle.sql.test.*
 
-import grackle.sql.test._
+import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Paths}
 
 trait DoobieH2DatabaseSuite extends DoobieDatabaseSuite {
   abstract class DoobieH2TestMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F] = DoobieMonitor.noopMonitor[IO])
@@ -95,7 +96,18 @@ trait DoobieH2DatabaseSuite extends DoobieDatabaseSuite {
         props,
         None
       )
-    )
+    ).flatMap(withTestData)
+  }
+
+  def withTestData(transactor: Transactor[IO]): Resource[IO, Transactor[IO]] = {
+    import scala.jdk.CollectionConverters._
+    for {
+      sql <- Files.list(Paths.get("testdata", "h2")).iterator().asScala.toList
+      content = Files.readString(sql, StandardCharsets.UTF_8)
+      alloc = sql"$content".update.run.transact(transactor).as(transactor)
+    } yield {
+      Resource(alloc)
+    }
   }
 
   val transactorFixture: IOFixture[Transactor[IO]] = ResourceSuiteLocalFixture("h2pg", transactorResource)
