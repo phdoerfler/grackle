@@ -15,6 +15,7 @@ val literallyVersion       = "1.1.0"
 val logbackVersion         = "1.5.23"
 val log4catsVersion        = "2.7.1"
 val mssqlDriverVersion     = "13.2.1.jre11"
+val h2DriverVersion        = "2.4.240"
 val munitVersion           = "1.0.0-M11"
 val munitCatsEffectVersion = "2.1.0"
 val munitScalaCheckVersion = "1.0.0-M11"
@@ -145,6 +146,7 @@ lazy val modules: List[CompositeProject] = List(
   doobiepg,
   doobieoracle,
   doobiemssql,
+  doobieh2,
   skunk,
   generic,
   docs,
@@ -290,6 +292,21 @@ lazy val doobiemssql = project
     Test / testOptions += Tests.Setup(_ => runDocker("docker compose up -d --wait --quiet-pull mssql")),
     libraryDependencies ++= Seq(
       "com.microsoft.sqlserver" % "mssql-jdbc" % mssqlDriverVersion
+    )
+  )
+
+lazy val doobieh2 = project
+  .in(file("modules/doobie-h2"))
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(RevolverPlugin)
+  .dependsOn(doobiecore % "test->test;compile->compile")
+  .settings(commonSettings)
+  .settings(
+    name := "grackle-doobie-h2",
+    Test / fork := true,
+    Test / parallelExecution := false,
+    libraryDependencies ++= Seq(
+      "com.h2database" % "h2" % h2DriverVersion
     )
   )
 
