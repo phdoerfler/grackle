@@ -24,8 +24,8 @@ import cats.effect.{IO, Resource, Sync}
 import cats.syntax.all.*
 import doobie.{Meta, Transactor}
 import doobie.enumerated.JdbcType
-import doobie.implicits.toSqlInterpolator
 import doobie.util.meta.MetaConstructors.Basic
+import doobie.util.update.Update0
 import io.circe.{Json, Decoder as CDecoder, Encoder as CEncoder}
 import io.circe.syntax.*
 import io.circe.parser.parse
@@ -36,6 +36,8 @@ import grackle.sql.test.*
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
+
+import doobie.implicits._
 
 trait DoobieH2DatabaseSuite extends DoobieDatabaseSuite {
   abstract class DoobieH2TestMapping[F[_]: Sync](transactor: Transactor[F], monitor: DoobieMonitor[F] = DoobieMonitor.noopMonitor[IO])
@@ -84,31 +86,68 @@ trait DoobieH2DatabaseSuite extends DoobieDatabaseSuite {
   val h2ConnectionInfo: H2ConnectionInfo =
     H2ConnectionInfo("localhost", H2ConnectionInfo.DefaultPort)
 
+//  def transactorResource: Resource[IO, Transactor[IO]] = {
+//    val connInfo = h2ConnectionInfo
+//    import connInfo._
+//
+//    val props = new java.util.Properties()
+//    Resource.pure(
+//      Transactor.fromDriverManager[IO](
+//        driverClassName,
+//        jdbcUrl,
+//        props,
+//        None
+//      )
+//    ).flatMap(withTestData)
+//  }
+
   def transactorResource: Resource[IO, Transactor[IO]] = {
     val connInfo = h2ConnectionInfo
     import connInfo._
 
-    val props = new java.util.Properties()
-    Resource.pure(
+    val xa =
       Transactor.fromDriverManager[IO](
         driverClassName,
         jdbcUrl,
-        props,
+        new java.util.Properties(),
         None
       )
-    ).flatMap(withTestData)
+
+    Resource
+      .pure(xa)
+      .evalTap(initializeTestData)
   }
 
-  def withTestData(transactor: Transactor[IO]): Resource[IO, Transactor[IO]] = {
+  def initializeTestData(xa: Transactor[IO]): IO[Unit] = {
     import scala.jdk.CollectionConverters._
-    for {
-      sql <- Files.list(Paths.get("testdata", "h2")).iterator().asScala.toList
-      content = Files.readString(sql, StandardCharsets.UTF_8)
-      alloc = sql"$content".update.run.transact(transactor).as(transactor)
-    } yield {
-      Resource(alloc)
-    }
+
+    Files
+      .list(Paths.get("testdata", "h2"))
+      .iterator()
+      .asScala
+      .toList
+      .traverse_ { path =>
+        val content = Files.readString(path, StandardCharsets.UTF_8)
+        singleTestFile(content).run.transact(xa).void
+      }
   }
+
+//  def withTestData(xa: Transactor[IO]): Resource[IO, Transactor[IO]] = {
+//    import scala.jdk.CollectionConverters._
+//    val things = for {
+//      sql <- Files.list(Paths.get("testdata", "h2")).iterator().asScala.toList
+//      content = Files.readString(sql, StandardCharsets.UTF_8)
+//      update = singleTestFile(content)
+//    } yield update.run
+//
+//    val all = things.reduceLeft(_ *> _)
+////    val all = things.sequence
+//
+//    Resource(all.transact(xa))
+//  }
+
+  def singleTestFile(content: String): Update0 =
+    sql"$content".update
 
   val transactorFixture: IOFixture[Transactor[IO]] = ResourceSuiteLocalFixture("h2pg", transactorResource)
   override def munitFixtures: Seq[IOFixture[_]] = Seq(transactorFixture)
