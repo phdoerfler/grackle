@@ -4,7 +4,7 @@ CREATE TABLE likes (
     nullable TEXT
 );
 
-COPY likes (id, notnullable, nullable) FROM STDIN WITH DELIMITER '|';
-1|foo|\N
-2|bar|baz
-\.
+INSERT INTO likes (id, notnullable, nullable) VALUES
+    (1, 'foo', NULL),
+    (2, 'bar', 'baz');
+
