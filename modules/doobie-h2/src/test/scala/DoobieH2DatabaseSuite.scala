@@ -34,8 +34,7 @@ import grackle.doobie.DoobieMonitor
 import grackle.doobie.test.DoobieDatabaseSuite
 import grackle.sql.test.*
 
-import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, Path, Paths}
 import doobie.implicits.*
 
 import scala.jdk.CollectionConverters.*
@@ -78,8 +77,15 @@ trait DoobieH2DatabaseSuite extends DoobieDatabaseSuite {
     val databaseName = "test"
     val username = "sa"
     val password = "Test_123_Test"
+//    val dbFile: Either[String, String] = Right(s"~/$databaseName") // or Left("mem:test") for in-memory
+    val dbFile: Either[String, String] = Left(s"mem:test") // or Left("mem:test") for in-memory
     // Change to jdbc:h2:mem:test for in-memory or jdbc:h2:~/$databaseName for on-disk
-    val jdbcUrl = s"jdbc:h2:~/$databaseName;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH"
+    val jdbcUrl = s"jdbc:h2:$fragment;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH"
+
+    private def fragment = dbFile match {
+      case Left(value) => value
+      case Right(value) => value
+    }
   }
 
   object H2ConnectionInfo {
@@ -116,10 +122,17 @@ trait DoobieH2DatabaseSuite extends DoobieDatabaseSuite {
         None
       )
 
+    //Resource.make(xa)(_ => deleteH2File)
     Resource
       .pure(xa)
       .evalTap(initializeTestData)
   }
+
+//  def deleteH2File: IO[Unit] = {
+//    import h2ConnectionInfo._
+//
+//
+//  }
 
   def initializeTestData(xa: Transactor[IO]): IO[Unit] = {
     val listFiles: IO[List[java.nio.file.Path]] =
@@ -133,46 +146,16 @@ trait DoobieH2DatabaseSuite extends DoobieDatabaseSuite {
       }
 
     for {
-      files <- listFiles
-      _ <- files.traverse_ { path =>
-        for {
-          content <- readFile(path)
-          updates  = singleTestFile(content)
-          _       <- updates.traverse_ { upd =>
-            println(s"Running update ${upd.sql}")
-            upd.run.transact(xa).void
-          }
-        } yield ()
+      scripts <- listFiles
+      _ <- scripts.traverse_ { path =>
+        println(s"Running update $path")
+        singleTestFile(path).run.transact(xa).void
       }
     } yield ()
   }
 
-  def readFile(path: java.nio.file.Path): IO[String] =
-    IO.blocking {
-      Files.readString(path, StandardCharsets.UTF_8)
-    }
-
-  //  def withTestData(xa: Transactor[IO]): Resource[IO, Transactor[IO]] = {
-//    import scala.jdk.CollectionConverters._
-//    val things = for {
-//      sql <- Files.list(Paths.get("testdata", "h2")).iterator().asScala.toList
-//      content = Files.readString(sql, StandardCharsets.UTF_8)
-//      update = singleTestFile(content)
-//    } yield update.run
-//
-//    val all = things.reduceLeft(_ *> _)
-////    val all = things.sequence
-//
-//    Resource(all.transact(xa))
-//  }
-
-  def singleTestFile(content: String): List[Update0] =
-    content
-      .split(";")
-      .map(_.trim)
-      .filter(_.nonEmpty)
-      .map(sql => Update0(sql, None))
-      .toList
+  def singleTestFile(scriptFile: Path): Update0 =
+    Update0(s"RUNSCRIPT FROM '$scriptFile'", None)
 
 
   val transactorFixture: IOFixture[Transactor[IO]] = ResourceSuiteLocalFixture("h2pg", transactorResource)
