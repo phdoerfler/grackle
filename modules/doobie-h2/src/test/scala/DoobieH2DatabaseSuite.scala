@@ -86,7 +86,13 @@ trait DoobieH2DatabaseSuite extends DoobieDatabaseSuite {
     }
     lazy val dbFileInMemory: Either[String, String] = Left(s"mem:test")
 
-    val jdbcUrl = s"jdbc:h2:$fragment;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1"
+    /*
+    Postgres mode allows to:
+
+    - use JSONB (instead of JSON) data type
+    - use SET client_encoding = 'UTF8'
+     */
+    val jdbcUrl = s"jdbc:h2:$fragment;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1"
 
     private def fragment = dbFile match {
       case Left(value) => value
@@ -135,7 +141,6 @@ trait DoobieH2DatabaseSuite extends DoobieDatabaseSuite {
       _ <- sql"DROP ALL OBJECTS".update.run.transact(xa).void
       scripts <- listFiles
       _ <- scripts.traverse_ { path =>
-        println(s"Running update $path") // TODO Remove
         singleTestFile(path).run.transact(xa).void
       }
     } yield ()

@@ -38,73 +38,49 @@ trait DoobieH2MappingLike[F[_]] extends DoobieMappingLike[F] with SqlMappingLike
     Fragments.const(" COLLATE DATABASE_DEFAULT")
 
   def aliasDefToFragment(alias: String): Fragment =
-    Fragments.const(s" $alias")
+    Fragments.const(s" AS $alias")
 
   def offsetToFragment(offset: Fragment): Fragment =
-    Fragments.const(" OFFSET ") |+| offset |+| Fragments.const(" ROWS")
+    Fragments.const(" OFFSET ") |+| offset
 
   def limitToFragment(limit: Fragment): Fragment =
-    Fragments.const(" FETCH FIRST ") |+| limit |+| Fragments.const(" ROWS ONLY")
+    Fragments.const(" LIMIT ") |+| limit
 
   def likeToFragment(expr: Fragment, pattern: String, caseInsensitive: Boolean): Fragment = {
-    val casedExpr = if(caseInsensitive) Fragments.const("UPPER(") |+| expr |+| Fragments.const(s")") else expr
-    val casedPattern = if(caseInsensitive) pattern.toUpperCase else pattern
-    casedExpr |+| Fragments.const(s" LIKE ") |+| Fragments.bind(stringEncoder, casedPattern)
+    val op = if(caseInsensitive) "ILIKE" else "LIKE"
+    expr |+| Fragments.const(s" $op ") |+| Fragments.bind(stringEncoder, pattern)
   }
 
   def ascribedNullToFragment(codec: Codec): Fragment =
     Fragments.sqlTypeName(codec) match {
-      case Some(name) if !name.startsWith("_") =>
-        val convName =
-          name match {
-            case "VARCHAR" => "CHAR"
-            case "NVARCHAR" => "NCHAR"
-            case "INTEGER" => "INTEGER"
-            case "BIGINT" => "BIGINT"
-            case "BOOLEAN" => "BIT"
-            case "TIMESTAMP" => "DATETIMEOFFSET" // TODO: Probably shouldn't be TIMESTAMP on the LHS
-            case other => other
-          }
-        Fragments.const(s"CAST(NULL AS $convName)")
-      case _ => Fragments.const("NULL")
+      case Some(name) => Fragments.const(s"CAST(NULL AS $name)")
+      case None => Fragments.const("NULL")
     }
 
   def collateSelected: Boolean = false
 
   def distinctOnToFragment(dcols: List[Fragment]): Fragment =
-    Fragments.const("DISTINCT ")
+    Fragments.const("DISTINCT ON ") |+| Fragments.parentheses(dcols.intercalate(Fragments.const(", ")))
 
-  def distinctOrderColumn(owner: ColumnOwner, col: SqlColumn, predCols: List[SqlColumn], orders: List[OrderSelection[_]]): SqlColumn =
-    SqlColumn.FirstValueColumn(owner, col, predCols, orders)
+  def distinctOrderColumn(owner: ColumnOwner, col: SqlColumn, predCols: List[SqlColumn], orders: List[OrderSelection[_]]): SqlColumn = col
 
-  def encapsulateUnionBranch(s: SqlSelect): SqlSelect =
-    if(s.orders.isEmpty) s
-    else s.toSubquery(s.table.name+"_encaps", Laterality.NotLateral)
-
-  def mkLateral(inner: Boolean): Laterality =
-    Laterality.Apply(inner)
-
-  def defaultOffsetForSubquery(subquery: SqlQuery): SqlQuery =
-    subquery match {
-      case s: SqlSelect if s.orders.nonEmpty && s.offset.isEmpty => s.copy(offset = 0.some)
-      case _ => subquery
-    }
-
-  def defaultOffsetForLimit(limit: Option[Int]): Option[Int] =
-    limit.as(0)
+  def encapsulateUnionBranch(s: SqlSelect): SqlSelect = s
+  def mkLateral(inner: Boolean): Laterality = Laterality.Apply(inner)
+  def defaultOffsetForSubquery(subquery: SqlQuery): SqlQuery = subquery
+  def defaultOffsetForLimit(limit: Option[Int]): Option[Int] = None
 
   def orderToFragment(col: Fragment, ascending: Boolean, nullsLast: Boolean): Fragment = {
     val dir = if(ascending) Fragments.empty else Fragments.const(" DESC")
     val nulls =
-      if(nullsLast && ascending)
-        Fragments.const(" CASE WHEN ") |+| col |+| Fragments.const(" IS NULL THEN 1 ELSE 0 END ASC, ")
-      else if(!nullsLast && !ascending)
-        Fragments.const(" CASE WHEN ") |+| col |+| Fragments.const(" IS NULL THEN 0 ELSE 1 END DESC, ")
+      if(!nullsLast && ascending)
+        Fragments.const(" NULLS FIRST ")
+      else if(nullsLast && !ascending)
+        Fragments.const(" NULLS LAST ")
       else
         Fragments.empty
 
-    nulls |+| col |+| dir
+    col |+| dir |+| nulls
   }
 
-  def nullsHigh: Boolean = false
+  def nullsHigh: Boolean = true
 }

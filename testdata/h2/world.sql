@@ -7,8 +7,6 @@
 
 BEGIN;
 
-SET client_encoding = 'UTF8';
-
 CREATE TABLE city (
     id integer NOT NULL,
     name text NOT NULL,

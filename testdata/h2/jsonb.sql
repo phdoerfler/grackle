@@ -1,6 +1,6 @@
 CREATE TABLE records (
     id Int PRIMARY KEY,
-    record JSONB
+    record JSON
 );
 
 INSERT INTO records (id, record)

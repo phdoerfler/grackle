@@ -135,7 +135,7 @@ final class MovieSuite extends DoobieH2DatabaseSuite with SqlMovieSuite {
 final class MutationSuite extends DoobieH2DatabaseSuite with SqlMutationSuite {
   // A resource that copies and drops the table used in the tests.
   def withDuplicatedTables(transactor: Transactor[IO]): Resource[IO, Transactor[IO]] = {
-    val alloc = sql"SELECT * INTO city_copy FROM city".update.run.transact(transactor).as(transactor)
+    val alloc = sql"CREATE TABLE city_copy AS SELECT * FROM city".update.run.transact(transactor).as(transactor)
     val free  = sql"DROP TABLE city_copy".update.run.transact(transactor).void
     Resource.make(alloc)(_ => free)
   }
