@@ -65,7 +65,7 @@ trait DoobieH2MappingLike[F[_]] extends DoobieMappingLike[F] with SqlMappingLike
   def distinctOrderColumn(owner: ColumnOwner, col: SqlColumn, predCols: List[SqlColumn], orders: List[OrderSelection[_]]): SqlColumn = col
 
   def encapsulateUnionBranch(s: SqlSelect): SqlSelect = s
-  def mkLateral(inner: Boolean): Laterality = Laterality.Apply(inner)
+  def mkLateral(inner: Boolean): Laterality = Laterality.NotLateral
   def defaultOffsetForSubquery(subquery: SqlQuery): SqlQuery = subquery
   def defaultOffsetForLimit(limit: Option[Int]): Option[Int] = None
 
