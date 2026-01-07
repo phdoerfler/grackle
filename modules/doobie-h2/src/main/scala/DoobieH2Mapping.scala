@@ -35,7 +35,7 @@ trait DoobieH2MappingLike[F[_]] extends DoobieMappingLike[F] with SqlMappingLike
   import TableExpr.Laterality
 
   def collateToFragment: Fragment =
-    Fragments.const(" COLLATE DATABASE_DEFAULT")
+    Fragments.const(" ") // TODO Not sure if no collation is the move
 
   def aliasDefToFragment(alias: String): Fragment =
     Fragments.const(s" AS $alias")
@@ -44,10 +44,10 @@ trait DoobieH2MappingLike[F[_]] extends DoobieMappingLike[F] with SqlMappingLike
     Fragments.const(" OFFSET ") |+| offset
 
   def limitToFragment(limit: Fragment): Fragment =
-    Fragments.const(" LIMIT ") |+| limit
+    Fragments.const(" FETCH NEXT ") |+| limit |+| Fragments.const(" ROWS ONLY")
 
   def likeToFragment(expr: Fragment, pattern: String, caseInsensitive: Boolean): Fragment = {
-    val op = if(caseInsensitive) "ILIKE" else "LIKE"
+    val op = if (caseInsensitive) "ILIKE" else "LIKE"
     expr |+| Fragments.const(s" $op ") |+| Fragments.bind(stringEncoder, pattern)
   }
 
