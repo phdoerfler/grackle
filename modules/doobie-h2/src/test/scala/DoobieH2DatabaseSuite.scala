@@ -74,13 +74,19 @@ trait DoobieH2DatabaseSuite extends DoobieDatabaseSuite {
 
   case class H2ConnectionInfo(host: String, port: Int) {
     val driverClassName = "org.h2.Driver"
-    val databaseName = "test"
-    val username = "sa"
-    val password = "Test_123_Test"
-//    val dbFile: Either[String, String] = Right(s"~/$databaseName") // or Left("mem:test") for in-memory
-    val dbFile: Either[String, String] = Left(s"mem:test") // or Left("mem:test") for in-memory
-    // Change to jdbc:h2:mem:test for in-memory or jdbc:h2:~/$databaseName for on-disk
-    val jdbcUrl = s"jdbc:h2:$fragment;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH"
+    val databaseName = "grackletestdb"
+
+    val useInMemory = true
+
+    val dbFile: Either[String, String] = if (useInMemory) dbFileInMemory else dbFileOnFs
+    lazy val dbFileOnFs: Either[String, String] = Right {
+      val tmp = Files.createTempFile("grackle", databaseName)
+      tmp.toFile.deleteOnExit()
+      tmp.toAbsolutePath.toString
+    }
+    lazy val dbFileInMemory: Either[String, String] = Left(s"mem:test")
+
+    val jdbcUrl = s"jdbc:h2:$fragment;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1"
 
     private def fragment = dbFile match {
       case Left(value) => value
@@ -94,21 +100,6 @@ trait DoobieH2DatabaseSuite extends DoobieDatabaseSuite {
 
   val h2ConnectionInfo: H2ConnectionInfo =
     H2ConnectionInfo("localhost", H2ConnectionInfo.DefaultPort)
-
-//  def transactorResource: Resource[IO, Transactor[IO]] = {
-//    val connInfo = h2ConnectionInfo
-//    import connInfo._
-//
-//    val props = new java.util.Properties()
-//    Resource.pure(
-//      Transactor.fromDriverManager[IO](
-//        driverClassName,
-//        jdbcUrl,
-//        props,
-//        None
-//      )
-//    ).flatMap(withTestData)
-//  }
 
   def transactorResource: Resource[IO, Transactor[IO]] = {
     val connInfo = h2ConnectionInfo
@@ -128,17 +119,13 @@ trait DoobieH2DatabaseSuite extends DoobieDatabaseSuite {
       .evalTap(initializeTestData)
   }
 
-//  def deleteH2File: IO[Unit] = {
-//    import h2ConnectionInfo._
-//
-//
-//  }
-
   def initializeTestData(xa: Transactor[IO]): IO[Unit] = {
     val listFiles: IO[List[java.nio.file.Path]] =
       IO.blocking {
+        val root = Paths.get("testdata", "h2")
+        val path = if (Files.exists(root)) root else Paths.get("..", "..", "testdata", "h2")
         Files
-          .list(Paths.get("..", "..", "testdata", "h2"))
+          .list(path)
           .iterator()
           .asScala
           .toList
@@ -146,6 +133,7 @@ trait DoobieH2DatabaseSuite extends DoobieDatabaseSuite {
       }
 
     for {
+      _ <- sql"DROP ALL OBJECTS".update.run.transact(xa).void
       scripts <- listFiles
       _ <- scripts.traverse_ { path =>
         println(s"Running update $path")
@@ -155,8 +143,7 @@ trait DoobieH2DatabaseSuite extends DoobieDatabaseSuite {
   }
 
   def singleTestFile(scriptFile: Path): Update0 =
-    Update0(s"RUNSCRIPT FROM '$scriptFile'", None)
-
+    Update0(s"RUNSCRIPT FROM '${scriptFile.toString.replace("\\", "/")}'", None)
 
   val transactorFixture: IOFixture[Transactor[IO]] = ResourceSuiteLocalFixture("h2pg", transactorResource)
   override def munitFixtures: Seq[IOFixture[_]] = Seq(transactorFixture)
