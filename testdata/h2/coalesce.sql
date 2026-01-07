@@ -20,27 +20,23 @@ CREATE TABLE cc (
     c TIMESTAMP WITH TIME ZONE NOT NULL
 );
 
-COPY r (id) FROM STDIN WITH DELIMITER '|';
-R1
-R2
-R3
-\.
+INSERT INTO r (id)
+VALUES ('R1'),
+       ('R2'),
+       ('R3');
 
-COPY ca (id, rid, a) FROM STDIN WITH DELIMITER '|';
-CA1a|R1|10
-CA1b|R1|11
-CA2|R2|20
-CA3|R3|30
-\.
+INSERT INTO ca (id, rid, a)
+VALUES ('CA1a', 'R1', 10),
+       ('CA1b', 'R1', 11),
+       ('CA2', 'R2', 20),
+       ('CA3', 'R3', 30);
 
-COPY cb (id, rid, b) FROM STDIN WITH DELIMITER '|';
-CB2a|R2|TRUE
-CB2b|R2|FALSE
-CB3|R3|TRUE
-\.
+INSERT INTO cb (id, rid, b)
+VALUES ('CB2a', 'R2', TRUE),
+       ('CB2b', 'R2', FALSE),
+       ('CB3', 'R3', TRUE);
 
-COPY cc (id, rid, c) FROM STDIN WITH DELIMITER '|';
-CC1|R1|2020-05-27T21:00:00+02
-CC2|R2|2004-10-19T10:23:54+02
-CC3|R3|2014-10-19T10:23:54+02
-\.
+INSERT INTO cc (id, rid, c)
+VALUES ('CC1', 'R1', '2020-05-27T21:00:00+02'),
+       ('CC2', 'R2', '2004-10-19T10:23:54+02'),
+       ('CC3', 'R3', '2014-10-19T10:23:54+02');

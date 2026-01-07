@@ -3,7 +3,6 @@ CREATE TABLE brands (
     categories Int
 );
 
-COPY brands (id, categories) FROM STDIN WITH DELIMITER '|';
-1|8
-2|16
-\.
+INSERT INTO brands (id, categories)
+VALUES (1, 8),
+       (2, 16);

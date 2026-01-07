@@ -6,7 +6,6 @@ CREATE TABLE collections (
     itemb TEXT
 );
 
-COPY collections (id, item_type, itema, itemb) FROM STDIN WITH DELIMITER '|' NULL AS '';
-1|ItemA|A|null
-2|ItemB|null|B
-\.
+INSERT INTO collections (id, item_type, itema, itemb)
+VALUES ('1', 'ItemA', 'A', NULL),
+       ('2', 'ItemB', NULL, 'B');

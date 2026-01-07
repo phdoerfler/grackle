@@ -7,14 +7,12 @@ CREATE TABLE t_observation (
   c_observation_id     VARCHAR    NOT NULL PRIMARY KEY
 );
 
-COPY t_program (c_program_id) FROM STDIN WITH DELIMITER '|';
-foo
-bar
-\.
+INSERT INTO t_program (c_program_id)
+VALUES ('foo'),
+       ('bar');
 
-COPY t_observation (c_program_id, c_observation_id) FROM STDIN WITH DELIMITER '|';
-foo|fo1
-foo|fo2
-bar|bo1
-bar|bo2
-\.
+INSERT INTO t_observation (c_program_id, c_observation_id)
+VALUES ('foo', 'fo1'),
+       ('foo', 'fo2'),
+       ('bar', 'bo1'),
+       ('bar', 'bo2');

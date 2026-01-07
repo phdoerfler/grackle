@@ -129,14 +129,13 @@ trait DoobieH2DatabaseSuite extends DoobieDatabaseSuite {
           .iterator()
           .asScala
           .toList
-          .filter(_.endsWith("like.sql"))
       }
 
     for {
       _ <- sql"DROP ALL OBJECTS".update.run.transact(xa).void
       scripts <- listFiles
       _ <- scripts.traverse_ { path =>
-        println(s"Running update $path")
+        println(s"Running update $path") // TODO Remove
         singleTestFile(path).run.transact(xa).void
       }
     } yield ()

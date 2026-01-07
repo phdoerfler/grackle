@@ -4,12 +4,11 @@ CREATE TABLE bintree (
   right_child INTEGER
 );
 
-COPY bintree (id, left_child, right_child) FROM STDIN WITH DELIMITER '|';
-0|1|2
-1|3|4
-2|5|6
-3|\N|\N
-4|\N|\N
-5|\N|\N
-6|\N|\N
-\.
+INSERT INTO bintree (id, left_child, right_child)
+VALUES (0, 1, 2),
+       (1, 3, 4),
+       (2, 5, 6),
+       (3, NULL, NULL),
+       (4, NULL, NULL),
+       (5, NULL, NULL),
+       (6, NULL, NULL);
