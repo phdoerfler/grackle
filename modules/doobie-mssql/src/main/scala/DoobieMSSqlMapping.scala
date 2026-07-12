@@ -90,6 +90,8 @@ trait DoobieMSSqlMappingLike[F[_]] extends DoobieMappingLike[F] with SqlMappingL
     if (s.orders.isEmpty) s
     else s.toSubquery(s.table.name + "_encaps", Laterality.NotLateral)
 
+  def unionBranchToFragment(branch: Fragment): Fragment = Fragments.parentheses(branch)
+
   def mkLateral(inner: Boolean): Laterality =
     Laterality.Apply(inner)
 
