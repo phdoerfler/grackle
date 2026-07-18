@@ -17,14 +17,14 @@ package demo.felines
 
 import cats.effect.IO
 import cats.syntax.all._
-import org.http4s.{Headers, HttpRoutes, Request, Response}
+import org.http4s.{Header, Headers, HttpRoutes, Request}
 import org.http4s.dsl.Http4sDsl
 import org.http4s.headers.Connection
 import org.http4s.server.websocket.WebSocketBuilder2
-import org.http4s.websocket.WebSocketFrame
 import org.typelevel.ci._
 import org.typelevel.log4cats.Logger
 
+import demo.felines.transport
 import grackle.Mapping
 
 // Dispatches requests at /cats to one of three subscription transports (or falls through to the
@@ -56,56 +56,44 @@ object CatsRoutes {
   // alone would be fine here too ("graphql-ws" is not a substring of "graphql-transport-ws"), but
   // exact-token matching after splitting is the technically correct way to read a header that's
   // explicitly defined as a comma-separated list.
-  def negotiateWsProtocol(req: Request[IO]): WsProtocol = {
-    val offered: List[String] =
-      req
-        .headers
-        .get(ci"Sec-WebSocket-Protocol")
-        .toList
-        .flatMap(_.toList)
-        .flatMap(_.value.split(",").toList)
-        .map(_.trim.toLowerCase)
+  def offeredWsProtocols(req: Request[IO]): List[String] =
+    req
+      .headers
+      .get(ci"Sec-WebSocket-Protocol")
+      .toList
+      .flatMap(_.toList)
+      .flatMap(_.value.split(",").toList)
+      .map(_.trim.toLowerCase)
 
-    // DIAGNOSTIC DEFAULT — Task 1 only. This branch is replaced with the real evidence-based
-    // default in Task 4, once the controller-and-human Playground probe (see the plan's Task 1
-    // note) determines what a WS client that offers no subprotocol at all actually needs.
+  // DIAGNOSTIC DEFAULT — Task 1/2 only, see Task 3 Step 2 for the real, evidence-based default.
+  def negotiateWsProtocol(offered: List[String]): WsProtocol =
     if (offered.contains("graphql-ws") && !offered.contains("graphql-transport-ws"))
       WsProtocol.Legacy
     else
       WsProtocol.Modern
-  }
-
-  // Diagnostic-only for this task: logs what a WS client actually sent, then closes the
-  // connection cleanly. Task 3/4 replace this branch's body with the real modern/legacy adapters;
-  // the header/subprotocol detection above is not diagnostic and carries forward unchanged.
-  private def diagnosticHandler(
-      wsb: WebSocketBuilder2[IO],
-      logger: Logger[IO],
-      protocol: WsProtocol): IO[Response[IO]] = {
-    import fs2.Stream
-    def logFrame(frame: WebSocketFrame): IO[Unit] =
-      frame match {
-        case t: WebSocketFrame.Text => logger.info(s"[cats ws diagnostic] received: ${t.str}")
-        case _ => IO.unit
-      }
-    val protocolToken = protocol match {
-      case WsProtocol.Modern => "graphql-transport-ws"
-      case WsProtocol.Legacy => "graphql-ws"
-    }
-    wsb
-      .withHeaders(Headers(org.http4s.Header.Raw(ci"Sec-WebSocket-Protocol", protocolToken)))
-      .build(Stream.empty, _.evalMap(logFrame))
-  }
 
   def routes(wsb: WebSocketBuilder2[IO], mapping: Mapping[IO], logger: Logger[IO]): HttpRoutes[IO] = {
     val dsl = new Http4sDsl[IO] {}
     import dsl._
     HttpRoutes.of[IO] {
       case req @ GET -> Root / "cats" if isWebSocketUpgrade(req) =>
-        logger.info(
-          s"[cats ws diagnostic] Sec-WebSocket-Protocol offered: " +
-            s"${req.headers.get(ci"Sec-WebSocket-Protocol").map(_.toList.map(_.value)).getOrElse(Nil)}"
-        ) *> diagnosticHandler(wsb, logger, negotiateWsProtocol(req))
+        val offered = offeredWsProtocols(req)
+        val protocol = negotiateWsProtocol(offered)
+        val confirmedWsb =
+          if (offered.isEmpty) wsb // RFC 6455: nothing was offered, so confirm nothing
+          else {
+            val token = protocol match {
+              case WsProtocol.Modern => "graphql-transport-ws"
+              case WsProtocol.Legacy => "graphql-ws"
+            }
+            wsb.withHeaders(Headers(Header.Raw(ci"Sec-WebSocket-Protocol", token)))
+          }
+        protocol match {
+          case WsProtocol.Modern => transport.ModernGraphQLWs.handler(confirmedWsb, mapping, logger)
+          case WsProtocol.Legacy =>
+            logger.info(s"[cats ws diagnostic] legacy dialect chosen, offered=$offered") *>
+              confirmedWsb.build(fs2.Stream.empty, _.void)
+        }
     }
   }
 }
