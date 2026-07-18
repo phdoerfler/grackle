@@ -129,13 +129,17 @@ trait CatsMapping[F[_]] extends SkunkMapping[F] {
           RootStream("catUpdated") { (query, path, env) =>
             env.getR[Int]("catUpdated_id") match {
               case Result.Success(id) =>
+                // Register the LISTEN before doing the initial fetch, not after: `Stream`'s `++`
+                // only starts its right-hand side once the left is exhausted, so emitting the
+                // initial trigger first would leave a window, between that fetch starting and
+                // the LISTEN being registered, where a concurrent NOTIFY is silently missed
+                // rather than merely causing a harmless extra re-fetch.
                 val triggers: Stream[F, Unit] =
-                  Stream.emit(()) ++
-                    listenSession
-                      .channel(catUpdatesChannel)
-                      .listen(maxQueued = 16)
-                      .filter(_.value == id.toString)
-                      .void
+                  Stream
+                    .resource(listenSession.channel(catUpdatesChannel).listenR(maxQueued = 16))
+                    .flatMap { notifications =>
+                      Stream.emit(()) ++ notifications.filter(_.value == id.toString).void
+                    }
                 triggers.evalMap(_ => defaultRootCursor(query, path.rootTpe, None))
               case other =>
                 Stream.emit(other.flatMap(_ =>
