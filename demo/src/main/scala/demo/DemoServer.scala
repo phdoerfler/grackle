@@ -22,33 +22,36 @@ import org.http4s.{HttpApp, HttpRoutes}
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.server.middleware.{ErrorAction, ErrorHandling, Logger}
 import org.http4s.server.staticcontent.resourceServiceBuilder
+import org.http4s.server.websocket.WebSocketBuilder2
 
 // #server
 object DemoServer {
-  def mkServer(graphQLRoutes: HttpRoutes[IO]): Resource[IO, Unit] = {
-    val httpApp0 = (
-      // Routes for static resources, i.e. GraphQL Playground
-      resourceServiceBuilder[IO]("/assets").toRoutes <+>
-        // GraphQL routes
-        graphQLRoutes
-    ).orNotFound
+  def mkServer(graphQLRoutes: WebSocketBuilder2[IO] => HttpRoutes[IO]): Resource[IO, Unit] = {
+    def httpApp(wsb: WebSocketBuilder2[IO]): HttpApp[IO] = {
+      val httpApp0 = (
+        // Routes for static resources, i.e. GraphQL Playground
+        resourceServiceBuilder[IO]("/assets").toRoutes <+>
+          // GraphQL routes
+          graphQLRoutes(wsb)
+      ).orNotFound
 
-    val httpApp = Logger.httpApp(true, false)(httpApp0)
+      val logged = Logger.httpApp(true, false)(httpApp0)
 
-    val withErrorLogging: HttpApp[IO] = ErrorHandling
-      .Recover
-      .total(
-        ErrorAction.log(
-          httpApp,
-          messageFailureLogAction = errorHandler,
-          serviceErrorLogAction = errorHandler))
+      ErrorHandling
+        .Recover
+        .total(
+          ErrorAction.log(
+            logged,
+            messageFailureLogAction = errorHandler,
+            serviceErrorLogAction = errorHandler))
+    }
 
     // Spin up the server ...
     EmberServerBuilder
       .default[IO]
       .withHost(ip"0.0.0.0")
       .withPort(port"8080")
-      .withHttpApp(withErrorLogging)
+      .withHttpWebSocketApp(httpApp)
       .build
       .void
   }

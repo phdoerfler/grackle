@@ -17,21 +17,26 @@ package demo
 
 import cats.effect.{ExitCode, IO, IOApp}
 import cats.syntax.all._
+import org.typelevel.log4cats.Logger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 import demo.DemoServer.mkServer
 import demo.GraphQLService.mkRoutes
-import demo.felines.CatsMapping
+import demo.felines.{CatsMapping, CatsRoutes}
 import demo.starwars.StarWarsMapping
 import demo.world.WorldMapping
 
 // #main
 object Main extends IOApp {
   def run(args: List[String]): IO[ExitCode] = {
+    val logger: Logger[IO] = Slf4jLogger.getLoggerFromName[IO]("demo.felines")
     (for {
       starWarsRoutes <- StarWarsMapping[IO].map(mkRoutes("starwars"))
       worldRoutes <- WorldMapping[IO].map(mkRoutes("world"))
-      catsRoutes <- CatsMapping.resource.map(mkRoutes("cats"))
-      _ <- mkServer(starWarsRoutes <+> worldRoutes <+> catsRoutes)
+      catsMapping <- CatsMapping.resource
+      catsHttpRoutes = mkRoutes("cats")(catsMapping)
+      _ <- mkServer(wsb =>
+        starWarsRoutes <+> worldRoutes <+> CatsRoutes.routes(wsb, catsMapping, logger) <+> catsHttpRoutes)
     } yield ()).useForever
   }
 }
