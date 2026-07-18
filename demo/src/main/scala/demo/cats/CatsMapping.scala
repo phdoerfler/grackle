@@ -17,6 +17,7 @@ package demo.cats
 
 import cats.effect.{IO, Resource}
 import cats.syntax.all._
+import fs2.Stream
 import org.typelevel.otel4s.metrics.Meter
 import org.typelevel.otel4s.metrics.Meter.Implicits.noop as metricsNoop
 import org.typelevel.otel4s.trace.Tracer
@@ -24,6 +25,7 @@ import org.typelevel.otel4s.trace.Tracer.Implicits.noop as tracerNoop
 import org.typelevel.twiddles._
 import skunk.Session
 import skunk.codec.{all => codec}
+import skunk.data.Identifier
 import skunk.implicits._
 
 import grackle._
@@ -38,13 +40,16 @@ import demo.world.WorldData.PostgresConnectionInfo
 
 trait CatsMapping[F[_]] extends SkunkMapping[F] {
 
+  def listenSession: Session[F]
+
   object cats extends TableDef("cats") {
     val id = col("id", codec.int4)
     val name = col("name", codec.varchar)
     val status = col("status", codec.varchar)
     val position = col("position", codec.varchar)
     val hairLength = col("hair_length", codec.varchar)
-    val updatedAt = col("updated_at", codec.timestamp.imap(_.toString)(java.time.LocalDateTime.parse))
+    val updatedAt =
+      col("updated_at", codec.timestamp.imap(_.toString)(java.time.LocalDateTime.parse))
   }
 
   val schema =
@@ -61,6 +66,10 @@ trait CatsMapping[F[_]] extends SkunkMapping[F] {
         updateCat(id: Int!, status: CatStatus, position: String, hairLength: HairLength): Cat!
       }
 
+      type Subscription {
+        catUpdated(id: Int!): Cat!
+      }
+
       type Cat {
         id: Int!
         name: String!
@@ -73,6 +82,7 @@ trait CatsMapping[F[_]] extends SkunkMapping[F] {
 
   val QueryType = schema.ref("Query")
   val MutationType = schema.ref("Mutation")
+  val SubscriptionType = schema.ref("Subscription")
   val CatType = schema.ref("Cat")
   val CatStatusType = schema.ref("CatStatus")
   val HairLengthType = schema.ref("HairLength")
@@ -113,6 +123,27 @@ trait CatsMapping[F[_]] extends SkunkMapping[F] {
           SqlField("updatedAt", cats.updatedAt)
         )
       ),
+      ObjectMapping(
+        tpe = SubscriptionType,
+        fieldMappings = List(
+          RootStream("catUpdated") { (query, path, env) =>
+            env.getR[Int]("catUpdated_id") match {
+              case Result.Success(id) =>
+                val triggers: Stream[F, Unit] =
+                  Stream.emit(()) ++
+                    listenSession
+                      .channel(catUpdatesChannel)
+                      .listen(maxQueued = 16)
+                      .filter(_.value == id.toString)
+                      .void
+                triggers.evalMap(_ => defaultRootCursor(query, path.rootTpe, None))
+              case other =>
+                Stream.emit(other.flatMap(_ =>
+                  Result.failure[(Query, Cursor)]("Missing catUpdated_id in environment")))
+            }
+          }
+        )
+      ),
       LeafMapping[String](CatStatusType),
       LeafMapping[String](HairLengthType)
     )
@@ -148,6 +179,12 @@ trait CatsMapping[F[_]] extends SkunkMapping[F] {
         _ <- Elab.env("updateCat", UpdateCat(id, statusOpt, positionOpt, hairLengthOpt))
         _ <- Elab.transformChild(child => Unique(Filter(Eql(CatType / "id", Const(id)), child)))
       } yield ()
+
+    case (SubscriptionType, "catUpdated", List(Binding("id", IntValue(id)))) =>
+      for {
+        _ <- Elab.env("catUpdated_id", id)
+        _ <- Elab.transformChild(child => Unique(Filter(Eql(CatType / "id", Const(id)), child)))
+      } yield ()
   }
 
   private val setStatus =
@@ -156,6 +193,9 @@ trait CatsMapping[F[_]] extends SkunkMapping[F] {
     sql"UPDATE cats SET position = ${codec.varchar} WHERE id = ${codec.int4}".command
   private val setHairLength =
     sql"UPDATE cats SET hair_length = ${codec.varchar} WHERE id = ${codec.int4}".command
+
+  private val catUpdatesChannel: Identifier =
+    Identifier.fromString("cat_updates").getOrElse(sys.error("invalid channel identifier"))
 
   def updateCatRow(
       id: Int,
@@ -186,6 +226,16 @@ object CatsMapping {
         .withUserAndPassword(connInfo.username, connInfo.password)
         .withDatabase(connInfo.databaseName)
         .pooled(max = 4)
-    } yield new SkunkMapping[IO](poolBorrow, SkunkMonitor.noopMonitor[IO]) with CatsMapping[IO]
+      listen <- Session
+        .Builder[IO]
+        .withHost(connInfo.host)
+        .withPort(connInfo.port)
+        .withUserAndPassword(connInfo.username, connInfo.password)
+        .withDatabase(connInfo.databaseName)
+        .single
+    } yield new SkunkMapping[IO](poolBorrow, SkunkMonitor.noopMonitor[IO])
+      with CatsMapping[IO] {
+      val listenSession = listen
+    }
   }
 }
