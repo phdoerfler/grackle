@@ -16,7 +16,6 @@
 package demo.felines
 
 import cats.effect.IO
-import cats.syntax.all._
 import org.http4s.{Header, Headers, HttpRoutes, Request}
 import org.http4s.dsl.Http4sDsl
 import org.http4s.headers.Connection
@@ -65,7 +64,10 @@ object CatsRoutes {
       .flatMap(_.value.split(",").toList)
       .map(_.trim.toLowerCase)
 
-  // DIAGNOSTIC DEFAULT — Task 1/2 only, see Task 3 Step 2 for the real, evidence-based default.
+  // Playground explicitly offers "graphql-ws" (confirmed via the controller's live probe), so
+  // it's already routed correctly by the explicit-match branch below. WsProtocol.Modern stays as
+  // the else default for clients that offer nothing recognized, since every other surveyed client
+  // (Postman, Apollo Client) explicitly declares the modern protocol.
   def negotiateWsProtocol(offered: List[String]): WsProtocol =
     if (offered.contains("graphql-ws") && !offered.contains("graphql-transport-ws"))
       WsProtocol.Legacy
@@ -79,20 +81,20 @@ object CatsRoutes {
       case req @ GET -> Root / "cats" if isWebSocketUpgrade(req) =>
         val offered = offeredWsProtocols(req)
         val protocol = negotiateWsProtocol(offered)
+        val token = protocol match {
+          case WsProtocol.Modern => "graphql-transport-ws"
+          case WsProtocol.Legacy => "graphql-ws"
+        }
         val confirmedWsb =
-          if (offered.isEmpty) wsb // RFC 6455: nothing was offered, so confirm nothing
-          else {
-            val token = protocol match {
-              case WsProtocol.Modern => "graphql-transport-ws"
-              case WsProtocol.Legacy => "graphql-ws"
-            }
-            wsb.withHeaders(Headers(Header.Raw(ci"Sec-WebSocket-Protocol", token)))
-          }
+          // RFC 6455: only confirm a subprotocol the client actually offered - echoing the
+          // decided token when it wasn't in `offered` (empty offer, or an offer of only
+          // unrecognized values that fell through to the Modern default) would confirm a
+          // subprotocol the client never asked for.
+          if (offered.contains(token)) wsb.withHeaders(Headers(Header.Raw(ci"Sec-WebSocket-Protocol", token)))
+          else wsb
         protocol match {
           case WsProtocol.Modern => transport.ModernGraphQLWs.handler(confirmedWsb, mapping, logger)
-          case WsProtocol.Legacy =>
-            logger.info(s"[cats ws diagnostic] legacy dialect chosen, offered=$offered") *>
-              confirmedWsb.build(fs2.Stream.empty, _.void)
+          case WsProtocol.Legacy => transport.LegacyGraphQLWs.handler(confirmedWsb, mapping, logger)
         }
     }
   }
