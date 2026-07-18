@@ -15,12 +15,12 @@
 
 package demo
 
-import _root_.cats.effect.{ExitCode, IO, IOApp}
-import _root_.cats.syntax.all._
+import cats.effect.{ExitCode, IO, IOApp}
+import cats.syntax.all._
 
 import demo.DemoServer.mkServer
 import demo.GraphQLService.mkRoutes
-import demo.cats.CatsMapping
+import demo.felines.CatsMapping
 import demo.starwars.StarWarsMapping
 import demo.world.WorldMapping
 

@@ -15,8 +15,8 @@
 
 package demo
 
-import _root_.cats.effect.Concurrent
-import _root_.cats.syntax.all._
+import cats.effect.Concurrent
+import cats.syntax.all._
 import io.circe.{parser, Json, ParsingFailure}
 import org.http4s.{HttpRoutes, InvalidMessageBodyFailure, ParseFailure, QueryParamDecoder}
 import org.http4s.circe._

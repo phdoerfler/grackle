@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package demo.cats
+package demo.felines
 
 import cats.effect.{ExitCode, IO, IOApp}
 
@@ -47,6 +47,6 @@ object WatchCat extends IOApp {
           }
           .as(ExitCode.Success)
       case _ =>
-        IO.println("Usage: sbt \"demo/runMain demo.cats.WatchCat <id>\"").as(ExitCode.Error)
+        IO.println("Usage: sbt \"demo/runMain demo.felines.WatchCat <id>\"").as(ExitCode.Error)
     }
 }

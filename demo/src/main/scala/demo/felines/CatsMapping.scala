@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package demo.cats
+package demo.felines
 
 import cats.effect.{IO, Resource}
 import cats.syntax.all._
