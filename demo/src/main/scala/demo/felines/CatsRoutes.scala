@@ -96,6 +96,10 @@ object CatsRoutes {
           case WsProtocol.Modern => transport.ModernGraphQLWs.handler(confirmedWsb, mapping, logger)
           case WsProtocol.Legacy => transport.LegacyGraphQLWs.handler(confirmedWsb, mapping, logger)
         }
+      case req @ GET -> Root / "cats" if acceptsEventStream(req) =>
+        transport.GraphQLSse.handler(mapping, req)
+      case req @ POST -> Root / "cats" if acceptsEventStream(req) =>
+        transport.GraphQLSse.handler(mapping, req)
     }
   }
 }
