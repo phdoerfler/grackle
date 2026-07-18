@@ -15,11 +15,12 @@
 
 package demo
 
-import cats.effect.{ExitCode, IO, IOApp}
-import cats.syntax.all._
+import _root_.cats.effect.{ExitCode, IO, IOApp}
+import _root_.cats.syntax.all._
 
 import demo.DemoServer.mkServer
 import demo.GraphQLService.mkRoutes
+import demo.cats.CatsMapping
 import demo.starwars.StarWarsMapping
 import demo.world.WorldMapping
 
@@ -29,7 +30,8 @@ object Main extends IOApp {
     (for {
       starWarsRoutes <- StarWarsMapping[IO].map(mkRoutes("starwars"))
       worldRoutes <- WorldMapping[IO].map(mkRoutes("world"))
-      _ <- mkServer(starWarsRoutes <+> worldRoutes)
+      catsRoutes <- CatsMapping.resource.map(mkRoutes("cats"))
+      _ <- mkServer(starWarsRoutes <+> worldRoutes <+> catsRoutes)
     } yield ()).useForever
   }
 }

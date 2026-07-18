@@ -15,8 +15,8 @@
 
 package demo
 
-import cats.effect.{IO, Resource}
-import cats.syntax.all._
+import _root_.cats.effect.{IO, Resource}
+import _root_.cats.syntax.all._
 import com.comcast.ip4s._
 import org.http4s.{HttpApp, HttpRoutes}
 import org.http4s.ember.server.EmberServerBuilder
