@@ -386,7 +386,7 @@ lazy val generic = crossProject(JVMPlatform, JSPlatform, NativePlatform)
 lazy val demo = project
   .in(file("demo"))
   .enablePlugins(NoPublishPlugin, AutomateHeaderPlugin)
-  .dependsOn(buildInfo.jvm, core.jvm, generic.jvm, doobiepg)
+  .dependsOn(buildInfo.jvm, core.jvm, generic.jvm, doobiepg, skunk.jvm)
   .settings(commonSettings)
   .settings(
     name := "grackle-demo",
