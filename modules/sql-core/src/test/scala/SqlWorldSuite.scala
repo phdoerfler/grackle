@@ -1195,7 +1195,10 @@ trait SqlWorldSuite extends CatsEffectSuite {
 
     val res = mapping.compileAndRun(query)
 
-    assertWeaklyEqualIO(res, expected, strictPaths = List(List("data", "countries")))
+    // Not strict: population ties among 7 of these 10 countries (all population 0) mean
+    // ORDER BY population alone has no defined order among them - only the 3 with distinct
+    // populations (Pitcairn, Cocos (Keeling) Islands, Holy See) have a guaranteed position.
+    assertWeaklyEqualIO(res, expected)
   }
 
   test("null in a nullable joined column") {
