@@ -1104,7 +1104,7 @@ trait SqlFilterOrderOffsetLimitSuite extends CatsEffectSuite {
 
     val res = mapping.compileAndRun(query)
 
-    assertWeaklyEqualIO(res, expected, strictPaths = List(List("root", "listA")))
+    assertWeaklyEqualIO(res, expected, strictPaths = List(List("data", "root", "listA")))
   }
 
   test("order on the other side") {
@@ -1172,7 +1172,7 @@ trait SqlFilterOrderOffsetLimitSuite extends CatsEffectSuite {
 
     val res = mapping.compileAndRun(query)
 
-    assertWeaklyEqualIO(res, expected, strictPaths = List(List("root", "listB")))
+    assertWeaklyEqualIO(res, expected, strictPaths = List(List("data", "root", "listB")))
   }
 
   test("order on both sides") {
@@ -1243,7 +1243,7 @@ trait SqlFilterOrderOffsetLimitSuite extends CatsEffectSuite {
     assertWeaklyEqualIO(
       res,
       expected,
-      strictPaths = List(List("root", "listA"), List("root", "listB")))
+      strictPaths = List(List("data", "root", "listA"), List("data", "root", "listB")))
   }
 
   test("alias with order on one side") {
@@ -1311,7 +1311,7 @@ trait SqlFilterOrderOffsetLimitSuite extends CatsEffectSuite {
 
     val res = mapping.compileAndRun(query)
 
-    assertWeaklyEqualIO(res, expected, strictPaths = List(List("root", "one")))
+    assertWeaklyEqualIO(res, expected, strictPaths = List(List("data", "root", "one")))
   }
 
   test("alias with order on both sides") {
@@ -1382,7 +1382,7 @@ trait SqlFilterOrderOffsetLimitSuite extends CatsEffectSuite {
     assertWeaklyEqualIO(
       res,
       expected,
-      strictPaths = List(List("root", "one"), List("root", "two")))
+      strictPaths = List(List("data", "root", "one"), List("data", "root", "two")))
   }
 
   test("order and limit on one side") {
@@ -1438,7 +1438,7 @@ trait SqlFilterOrderOffsetLimitSuite extends CatsEffectSuite {
 
     val res = mapping.compileAndRun(query)
 
-    assertWeaklyEqualIO(res, expected, strictPaths = List(List("root", "listA")))
+    assertWeaklyEqualIO(res, expected, strictPaths = List(List("data", "root", "listA")))
   }
 
   test("order and limit on the other side") {
@@ -1494,7 +1494,7 @@ trait SqlFilterOrderOffsetLimitSuite extends CatsEffectSuite {
 
     val res = mapping.compileAndRun(query)
 
-    assertWeaklyEqualIO(res, expected, strictPaths = List(List("root", "listB")))
+    assertWeaklyEqualIO(res, expected, strictPaths = List(List("data", "root", "listB")))
   }
 
   test("order and limit on both sides") {
@@ -1541,7 +1541,7 @@ trait SqlFilterOrderOffsetLimitSuite extends CatsEffectSuite {
     assertWeaklyEqualIO(
       res,
       expected,
-      strictPaths = List(List("root", "listA"), List("root", "listB")))
+      strictPaths = List(List("data", "root", "listA"), List("data", "root", "listB")))
   }
 
   test("alias with order and limit on one side") {
@@ -1597,7 +1597,7 @@ trait SqlFilterOrderOffsetLimitSuite extends CatsEffectSuite {
 
     val res = mapping.compileAndRun(query)
 
-    assertWeaklyEqualIO(res, expected, strictPaths = List(List("root", "one")))
+    assertWeaklyEqualIO(res, expected, strictPaths = List(List("data", "root", "one")))
   }
 
   test("alias with order and limit on both sides") {
@@ -1644,6 +1644,6 @@ trait SqlFilterOrderOffsetLimitSuite extends CatsEffectSuite {
     assertWeaklyEqualIO(
       res,
       expected,
-      strictPaths = List(List("root", "one"), List("root", "two")))
+      strictPaths = List(List("data", "root", "one"), List("data", "root", "two")))
   }
 }
