@@ -1948,6 +1948,9 @@ trait SqlWorldSuite extends CatsEffectSuite {
 
     val res = mapping.compileAndRun(query)
 
-    assertWeaklyEqualIO(res, expected, strictPaths = List(List("data", "countries")))
+    // Not strict: all 3 returned countries (Bouvet Island, Antarctica, French Southern
+    // territories) tie at population 0, so ORDER BY population alone has no defined order
+    // among them - same fragility as "query with ordering, ordering field not selected" above.
+    assertWeaklyEqualIO(res, expected)
   }
 }
