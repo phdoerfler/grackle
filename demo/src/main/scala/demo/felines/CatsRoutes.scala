@@ -23,8 +23,9 @@ import org.http4s.server.websocket.WebSocketBuilder2
 import org.typelevel.ci._
 import org.typelevel.log4cats.Logger
 
-import demo.felines.transport
 import grackle.Mapping
+
+import demo.felines.transport
 
 // Dispatches requests at /cats to one of three subscription transports (or falls through to the
 // plain HTTP query/mutation route already built by GraphQLService, composed alongside this in
@@ -38,7 +39,8 @@ object CatsRoutes {
   sealed trait WsProtocol
   object WsProtocol {
     case object Modern extends WsProtocol // graphql-transport-ws
-    case object Legacy extends WsProtocol // subscriptions-transport-ws, subprotocol "graphql-ws"
+    case object Legacy
+        extends WsProtocol // subscriptions-transport-ws, subprotocol "graphql-ws"
   }
 
   def isWebSocketUpgrade(req: Request[IO]): Boolean =
@@ -74,7 +76,10 @@ object CatsRoutes {
     else
       WsProtocol.Modern
 
-  def routes(wsb: WebSocketBuilder2[IO], mapping: Mapping[IO], logger: Logger[IO]): HttpRoutes[IO] = {
+  def routes(
+      wsb: WebSocketBuilder2[IO],
+      mapping: Mapping[IO],
+      logger: Logger[IO]): HttpRoutes[IO] = {
     val dsl = new Http4sDsl[IO] {}
     import dsl._
     HttpRoutes.of[IO] {
@@ -90,11 +95,14 @@ object CatsRoutes {
           // decided token when it wasn't in `offered` (empty offer, or an offer of only
           // unrecognized values that fell through to the Modern default) would confirm a
           // subprotocol the client never asked for.
-          if (offered.contains(token)) wsb.withHeaders(Headers(Header.Raw(ci"Sec-WebSocket-Protocol", token)))
+          if (offered.contains(token))
+            wsb.withHeaders(Headers(Header.Raw(ci"Sec-WebSocket-Protocol", token)))
           else wsb
         protocol match {
-          case WsProtocol.Modern => transport.ModernGraphQLWs.handler(confirmedWsb, mapping, logger)
-          case WsProtocol.Legacy => transport.LegacyGraphQLWs.handler(confirmedWsb, mapping, logger)
+          case WsProtocol.Modern =>
+            transport.ModernGraphQLWs.handler(confirmedWsb, mapping, logger)
+          case WsProtocol.Legacy =>
+            transport.LegacyGraphQLWs.handler(confirmedWsb, mapping, logger)
         }
       case req @ GET -> Root / "cats" if acceptsEventStream(req) =>
         transport.GraphQLSse.handler(mapping, req)

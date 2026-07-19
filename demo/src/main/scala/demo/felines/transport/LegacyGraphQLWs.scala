@@ -21,7 +21,7 @@ import cats.effect.{Fiber, IO, Ref}
 import cats.effect.std.Queue
 import cats.syntax.all._
 import fs2.Stream
-import io.circe.{Json, JsonObject, parser}
+import io.circe.{parser, Json, JsonObject}
 import io.circe.syntax._
 import org.http4s.Response
 import org.http4s.server.websocket.WebSocketBuilder2
@@ -61,14 +61,18 @@ object LegacyGraphQLWs {
       "type" -> "error".asJson,
       "payload" -> Json.obj("message" -> msg.asJson))
 
-  def handler(wsb: WebSocketBuilder2[IO], mapping: Mapping[IO], logger: Logger[IO]): IO[Response[IO]] =
+  def handler(
+      wsb: WebSocketBuilder2[IO],
+      mapping: Mapping[IO],
+      logger: Logger[IO]): IO[Response[IO]] =
     for {
       out <- Queue.unbounded[IO, WebSocketFrame]
       subs <- IO.ref(Map.empty[String, Fiber[IO, Throwable, Unit]])
       keepAlive = Stream.awakeEvery[IO](20.seconds).as(text(kaMsg))
       resp <- wsb.build(
         Stream.fromQueueUnterminated(out).merge(keepAlive),
-        _.foreach(frame => handle(mapping, logger, out, subs, frame)).onFinalize(cancelAll(subs))
+        _.foreach(frame => handle(mapping, logger, out, subs, frame))
+          .onFinalize(cancelAll(subs))
       )
     } yield resp
 

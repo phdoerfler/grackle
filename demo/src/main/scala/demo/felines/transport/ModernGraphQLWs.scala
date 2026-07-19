@@ -21,7 +21,7 @@ import cats.effect.{Fiber, IO, Ref}
 import cats.effect.std.Queue
 import cats.syntax.all._
 import fs2.Stream
-import io.circe.{Json, JsonObject, parser}
+import io.circe.{parser, Json, JsonObject}
 import io.circe.syntax._
 import org.http4s.Response
 import org.http4s.server.websocket.WebSocketBuilder2
@@ -58,7 +58,10 @@ object ModernGraphQLWs {
       "type" -> "error".asJson,
       "payload" -> Json.arr(Json.obj("message" -> msg.asJson)))
 
-  def handler(wsb: WebSocketBuilder2[IO], mapping: Mapping[IO], logger: Logger[IO]): IO[Response[IO]] =
+  def handler(
+      wsb: WebSocketBuilder2[IO],
+      mapping: Mapping[IO],
+      logger: Logger[IO]): IO[Response[IO]] =
     for {
       out <- Queue.unbounded[IO, WebSocketFrame]
       subs <- IO.ref(Map.empty[String, Fiber[IO, Throwable, Unit]])
@@ -67,7 +70,8 @@ object ModernGraphQLWs {
       heartbeat = Stream.awakeEvery[IO](20.seconds).as(WebSocketFrame.Ping())
       resp <- wsb.build(
         Stream.fromQueueUnterminated(out).merge(heartbeat),
-        _.foreach(frame => handle(mapping, logger, out, subs, frame)).onFinalize(cancelAll(subs))
+        _.foreach(frame => handle(mapping, logger, out, subs, frame))
+          .onFinalize(cancelAll(subs))
       )
     } yield resp
 

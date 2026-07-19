@@ -18,7 +18,7 @@ package demo.felines.transport
 import cats.effect.IO
 import cats.syntax.all._
 import io.circe.{parser, Json, ParsingFailure}
-import org.http4s.{EntityEncoder, ParseFailure, QueryParamDecoder, Request, Response, ServerSentEvent}
+import org.http4s.{ParseFailure, QueryParamDecoder, Request, Response, ServerSentEvent}
 import org.http4s.circe._
 import org.http4s.dsl.Http4sDsl
 
@@ -46,8 +46,10 @@ object GraphQLSse {
       }
 
     object QueryMatcher extends QueryParamDecoderMatcher[String]("query")
-    object OperationNameMatcher extends OptionalQueryParamDecoderMatcher[String]("operationName")
-    object VariablesMatcher extends OptionalValidatingQueryParamDecoderMatcher[Json]("variables")
+    object OperationNameMatcher
+        extends OptionalQueryParamDecoderMatcher[String]("operationName")
+    object VariablesMatcher
+        extends OptionalValidatingQueryParamDecoderMatcher[Json]("variables")
 
     def stream(query: String, op: Option[String], vars: Option[Json]): IO[Response[IO]] = {
       val events =
@@ -76,6 +78,7 @@ object GraphQLSse {
           vars = obj("variables")
           resp <- stream(query, op, vars)
         } yield resp
+      case _ => NotFound()
     }
   }
 

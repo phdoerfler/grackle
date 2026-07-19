@@ -36,7 +36,8 @@ object Main extends IOApp {
       catsMapping <- CatsMapping.resource
       catsHttpRoutes = mkRoutes("cats")(catsMapping)
       _ <- mkServer(wsb =>
-        starWarsRoutes <+> worldRoutes <+> CatsRoutes.routes(wsb, catsMapping, logger) <+> catsHttpRoutes)
+        starWarsRoutes <+> worldRoutes <+> CatsRoutes
+          .routes(wsb, catsMapping, logger) <+> catsHttpRoutes)
     } yield ()).useForever
   }
 }
