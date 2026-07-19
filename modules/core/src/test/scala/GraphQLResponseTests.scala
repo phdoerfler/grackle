@@ -79,7 +79,7 @@ object GraphQLResponseTests {
         strictPaths: List[List[String]],
         path: List[String]): Boolean = {
       xs.sizeCompare(ys) == 0 && {
-        if (strictPaths.contains(path))
+        if (strictPaths.contains(Nil))
           xs.zip(ys).forall { case (x, y) => cmpJson(x, y, strictPaths, path) }
         else {
           def loop(xs: Iterator[Json], ys: Vector[Json]): Boolean = {
