@@ -110,6 +110,8 @@ lazy val oracleUp = taskKey[Unit]("Start Oracle")
 lazy val oracleStop = taskKey[Unit]("Stop Oracle")
 lazy val mssqlUp = taskKey[Unit]("Start SQL Server")
 lazy val mssqlStop = taskKey[Unit]("Stop SQL Server")
+lazy val benchPgUp = taskKey[Unit]("Start benchmark Postgres (AdventureWorks)")
+lazy val benchPgStop = taskKey[Unit]("Stop benchmark Postgres (AdventureWorks)")
 
 ThisBuild / allUp := runDocker("docker compose up -d --wait --quiet-pull")
 ThisBuild / allStop := runDocker("docker compose stop")
@@ -119,6 +121,8 @@ ThisBuild / oracleUp := runDocker("docker compose up -d --wait --quiet-pull orac
 ThisBuild / oracleStop := runDocker("docker compose stop oracle")
 ThisBuild / mssqlUp := runDocker("docker compose up -d --wait --quiet-pull mssql")
 ThisBuild / mssqlStop := runDocker("docker compose stop mssql")
+ThisBuild / benchPgUp := runDocker("docker compose up -d --wait --quiet-pull benchmark-postgres")
+ThisBuild / benchPgStop := runDocker("docker compose stop benchmark-postgres")
 
 def runDocker(cmd: String): Unit = {
   require(cmd.! == 0, s"docker indicated an error")
@@ -186,6 +190,7 @@ lazy val modules: List[CompositeProject] = List(
   unidocs,
   demo,
   benchmarks,
+  benchmarksSql,
   profile
 )
 
@@ -419,6 +424,25 @@ lazy val benchmarks = project
   .settings(commonSettings)
   .settings(
     coverageEnabled := false
+  )
+
+lazy val benchmarksSql = project
+  .in(file("benchmarks-sql"))
+  .dependsOn(core.jvm, doobiepg)
+  .enablePlugins(NoPublishPlugin, AutomateHeaderPlugin, JmhPlugin)
+  .settings(commonSettings)
+  .settings(
+    name := "grackle-benchmarks-sql",
+    coverageEnabled := false,
+    Test / fork := true,
+    Test / parallelExecution := false,
+    Test / testOptions += Tests
+      .Setup(_ => runDocker("docker compose up -d --wait --quiet-pull benchmark-postgres")),
+    Jmh / run :=
+      Def
+        .inputTask((Jmh / run).evaluated)
+        .dependsOn(ThisBuild / benchPgUp)
+        .evaluated
   )
 
 lazy val profile = project
