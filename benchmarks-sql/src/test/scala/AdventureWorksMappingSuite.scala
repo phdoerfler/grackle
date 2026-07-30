@@ -16,6 +16,7 @@
 package grackle.benchmarks.sql
 
 import cats.effect.IO
+import cats.syntax.all._
 import io.circe.Json
 import munit.CatsEffectSuite
 
@@ -68,6 +69,15 @@ class AdventureWorksMappingSuite extends CatsEffectSuite {
 
       val categoryName = found.get.hcursor.downField("name").as[String].getOrElse("")
       assert(knownCategoryNames(categoryName), s"unexpected category name: $categoryName")
+    }
+  }
+
+  test("every depth from 1 to maxDepth resolves without GraphQL errors") {
+    (1 to JoinChain.maxDepth).toList.traverse { depth =>
+      mapping.compileAndRun(JoinChain.queryForDepth(depth)).map { result =>
+        val cursor = result.hcursor
+        assert(!cursor.downField("errors").succeeded, s"depth $depth produced GraphQL errors: $result")
+      }
     }
   }
 }
