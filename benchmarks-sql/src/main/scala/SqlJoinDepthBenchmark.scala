@@ -19,12 +19,26 @@ import java.util.concurrent.TimeUnit
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-
 import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
 
 import grackle.Mapping
 
+/**
+ * Measures how Grackle's compile+execute time scales with GraphQL query nesting depth against a
+ * real 11-table join chain. Requires `benchmark-postgres` to be running (`sbt benchPgUp`).
+ *
+ * JMH's defaults (5 forks x (5 warmup + 5 measurement) iterations x 10s x 5 `depth` params) add
+ * up to 40+ minutes here, since the depth-10 operation alone takes hundreds of milliseconds.
+ * For a quick sanity run, pass explicit flags:
+ *
+ * sbt "benchmarksSql/Jmh/run -f 1 -wi 3 -w 2s -i 5 -r 2s -rf json -rff results.json"
+ *
+ * Which means "1 fork", "3 warm-up iterations of 2s", "5 measurement iterations of 2s". That
+ * takes on the order of a couple of minutes and is fine for iterating on the benchmark itself,
+ * but for results anyone will rely on, use heavier settings (more forks and iterations, e.g.
+ * JMH's own defaults) to get a trustworthy spread.
+ */
 @State(Scope.Benchmark)
 @BenchmarkMode(Array(Mode.SampleTime))
 @OutputTimeUnit(TimeUnit.MILLISECONDS)

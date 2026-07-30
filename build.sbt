@@ -121,8 +121,10 @@ ThisBuild / oracleUp := runDocker("docker compose up -d --wait --quiet-pull orac
 ThisBuild / oracleStop := runDocker("docker compose stop oracle")
 ThisBuild / mssqlUp := runDocker("docker compose up -d --wait --quiet-pull mssql")
 ThisBuild / mssqlStop := runDocker("docker compose stop mssql")
-ThisBuild / benchPgUp := runDocker("docker compose up -d --wait --quiet-pull benchmark-postgres")
-ThisBuild / benchPgStop := runDocker("docker compose stop benchmark-postgres")
+ThisBuild / benchPgUp :=
+  runDocker("docker compose --profile benchmarks up -d --wait --quiet-pull benchmark-postgres")
+ThisBuild / benchPgStop := runDocker(
+  "docker compose --profile benchmarks stop benchmark-postgres")
 
 def runDocker(cmd: String): Unit = {
   require(cmd.! == 0, s"docker indicated an error")
@@ -190,7 +192,8 @@ lazy val modules: List[CompositeProject] = List(
   unidocs,
   demo,
   benchmarks,
-  benchmarksSql,
+  // benchmarksSql deliberately excluded: its tests require the seeded
+  // benchmark-postgres database (see benchmarksSql project def below).
   profile
 )
 
@@ -429,6 +432,10 @@ lazy val benchmarks = project
     coverageEnabled := false
   )
 
+// Not aggregated into `modules` above: its tests require the seeded
+// benchmark-postgres database, which is not started as part of an ordinary
+// `sbt test`. Reachable directly via `benchmarksSql/test` and
+// `benchmarksSql/Jmh/run`.
 lazy val benchmarksSql = project
   .in(file("benchmarks-sql"))
   .dependsOn(core.jvm, doobiepg)
@@ -439,13 +446,12 @@ lazy val benchmarksSql = project
     coverageEnabled := false,
     Test / fork := true,
     Test / parallelExecution := false,
-    Test / testOptions += Tests
-      .Setup(_ => runDocker("docker compose up -d --wait --quiet-pull benchmark-postgres")),
+    Test / testOptions += Tests.Setup(_ =>
+      runDocker(
+        "docker compose --profile benchmarks up -d --wait --quiet-pull benchmark-postgres"
+      )),
     Jmh / run :=
-      Def
-        .inputTask((Jmh / run).evaluated)
-        .dependsOn(ThisBuild / benchPgUp)
-        .evaluated
+      Def.inputTask((Jmh / run).evaluated).dependsOn(ThisBuild / benchPgUp).evaluated
   )
 
 lazy val profile = project

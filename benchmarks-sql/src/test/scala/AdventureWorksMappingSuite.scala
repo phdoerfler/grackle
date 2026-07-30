@@ -46,11 +46,18 @@ class AdventureWorksMappingSuite extends CatsEffectSuite {
       case (field, isList) :: rest =>
         current.hcursor.downField(field).focus.flatMap { next =>
           if (isList)
-            next.asArray.getOrElse(Vector.empty).view.flatMap(elem => descend(elem, rest)).headOption
+            next
+              .asArray
+              .getOrElse(Vector.empty)
+              .view
+              .flatMap(elem => descend(elem, rest))
+              .headOption
           else if (next.isNull) None
           else descend(next, rest)
         }
     }
+
+  assertEquals(hopsWithCardinality.map(_._1), JoinChain.hops)
 
   val knownCategoryNames: Set[String] = Set("Bikes", "Components", "Clothing", "Accessories")
 
@@ -60,7 +67,10 @@ class AdventureWorksMappingSuite extends CatsEffectSuite {
       assert(!cursor.downField("errors").succeeded, s"unexpected GraphQL errors: $result")
 
       val countryRegions =
-        cursor.downField("data").downField("countryRegions").focus
+        cursor
+          .downField("data")
+          .downField("countryRegions")
+          .focus
           .flatMap(_.asArray)
           .getOrElse(Vector.empty)
 
@@ -76,7 +86,9 @@ class AdventureWorksMappingSuite extends CatsEffectSuite {
     (1 to JoinChain.maxDepth).toList.traverse { depth =>
       mapping.compileAndRun(JoinChain.queryForDepth(depth)).map { result =>
         val cursor = result.hcursor
-        assert(!cursor.downField("errors").succeeded, s"depth $depth produced GraphQL errors: $result")
+        assert(
+          !cursor.downField("errors").succeeded,
+          s"depth $depth produced GraphQL errors: $result")
       }
     }
   }

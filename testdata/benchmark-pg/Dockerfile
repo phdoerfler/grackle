@@ -21,7 +21,10 @@ RUN apt-get update && \
 RUN mkdir /data
 # Pinned to a specific commit (not `master`) so a future image rebuild can't
 # silently pick up a schema/data change upstream. Bump this SHA deliberately,
-# not as a side effect of an unrelated rebuild.
+# not as a side effect of an unrelated rebuild. `docker compose up` does not
+# rebuild an existing image or reseed the anonymous data volume on its own —
+# after bumping this pin, follow the rebuild procedure documented in
+# benchmarks-sql/README.md ("Rebuilding after a Dockerfile change").
 RUN curl -fsL -o /data/install.sql https://raw.githubusercontent.com/lorint/AdventureWorks-for-Postgres/b474991f0df1c4bf55ca4735eb0254ca0709eed2/install.sql
 RUN curl -fsL -o /data/update_csvs.rb https://raw.githubusercontent.com/lorint/AdventureWorks-for-Postgres/b474991f0df1c4bf55ca4735eb0254ca0709eed2/update_csvs.rb
 RUN curl -fsL -o /data/adventure_works_2014_OLTP_script.zip https://github.com/Microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorks-oltp-install-script.zip

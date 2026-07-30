@@ -34,6 +34,7 @@ services:
 
   benchmark-postgres:
     build: ./testdata/benchmark-pg
+    profiles: ["benchmarks"]
     ports:
       - "5433:5432"
     environment:
@@ -41,7 +42,7 @@ services:
       - POSTGRES_USER=benchmark
       - POSTGRES_PASSWORD=benchmark
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U benchmark -d benchmark"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U benchmark -d benchmark"]
       interval: 5s
       timeout: 5s
       retries: 30
