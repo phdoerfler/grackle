@@ -182,10 +182,16 @@ trait AdventureWorksMapping[F[_]] extends AdventureWorksSchema[F] {
         SqlObject("businessEntityAddresses", Join(address.id, businessEntityAddress.addressId))
       ),
       ObjectMapping(BusinessEntityAddressType)(
-        SqlField("businessEntityId", businessEntityAddress.businessEntityId, key = true, hidden = true),
+        SqlField(
+          "businessEntityId",
+          businessEntityAddress.businessEntityId,
+          key = true,
+          hidden = true),
         SqlField("addressId", businessEntityAddress.addressId, hidden = true),
         SqlField("addressTypeId", businessEntityAddress.addressTypeId),
-        SqlObject("person", Join(businessEntityAddress.businessEntityId, person.businessEntityId))
+        SqlObject(
+          "person",
+          Join(businessEntityAddress.businessEntityId, person.businessEntityId))
       ),
       ObjectMapping(PersonType)(
         SqlField("businessEntityId", person.businessEntityId, key = true, hidden = true),

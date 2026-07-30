@@ -50,7 +50,9 @@ object JoinChain {
     )
 
   def queryForDepth(depth: Int): String = {
-    require(depth >= 1 && depth <= maxDepth, s"depth must be between 1 and $maxDepth, got $depth")
+    require(
+      depth >= 1 && depth <= maxDepth,
+      s"depth must be between 1 and $maxDepth, got $depth")
 
     def nest(remaining: List[String]): String =
       remaining match {
