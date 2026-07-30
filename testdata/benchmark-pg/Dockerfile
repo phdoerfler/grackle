@@ -35,11 +35,4 @@ RUN cd /data && \
 COPY install.sh /docker-entrypoint-initdb.d/10-install.sh
 RUN dos2unix /docker-entrypoint-initdb.d/10-install.sh && chmod +x /docker-entrypoint-initdb.d/10-install.sh
 
-# Runs after 10-install.sh (docker-entrypoint processes /docker-entrypoint-initdb.d
-# alphabetically): restores the SQL Server computed columns that install.sql drops
-# once the CSV import is done, so the benchmark mapping matches the SQL Server
-# dataset. See the file itself for details.
-COPY restore-computed-columns.sql /docker-entrypoint-initdb.d/20-restore-computed-columns.sql
-RUN dos2unix /docker-entrypoint-initdb.d/20-restore-computed-columns.sql
-
 WORKDIR /data/

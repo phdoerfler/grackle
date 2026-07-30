@@ -58,13 +58,13 @@ trait AdventureWorksSchema[F[_]] extends DoobiePgMapping[F] {
   object customer extends TableDef("sales.customer") {
     val id = col("customerid", Meta[Int])
     val personId = col("personid", Meta[Int], true)
-    val accountNumber = col("accountnumber", Meta[String], true)
+    val territoryId = col("territoryid", Meta[Int], true)
   }
 
   object salesOrderHeader extends TableDef("sales.salesorderheader") {
     val id = col("salesorderid", Meta[Int])
     val customerId = col("customerid", Meta[Int])
-    val orderNumber = col("salesordernumber", Meta[String], true)
+    val totalDue = col("totaldue", Meta[BigDecimal], true)
   }
 
   object salesOrderDetail extends TableDef("sales.salesorderdetail") {
@@ -123,11 +123,11 @@ trait AdventureWorksMapping[F[_]] extends AdventureWorksSchema[F] {
         customers: [Customer!]!
       }
       type Customer {
-        accountNumber: String
+        territoryId: Int
         salesOrders: [SalesOrderHeader!]!
       }
       type SalesOrderHeader {
-        salesOrderNumber: String
+        totalDue: Float
         lineItems: [SalesOrderDetail!]!
       }
       type SalesOrderDetail {
@@ -195,12 +195,12 @@ trait AdventureWorksMapping[F[_]] extends AdventureWorksSchema[F] {
       ),
       ObjectMapping(CustomerType)(
         SqlField("id", customer.id, key = true, hidden = true),
-        SqlField("accountNumber", customer.accountNumber),
+        SqlField("territoryId", customer.territoryId),
         SqlObject("salesOrders", Join(customer.id, salesOrderHeader.customerId))
       ),
       ObjectMapping(SalesOrderHeaderType)(
         SqlField("id", salesOrderHeader.id, key = true, hidden = true),
-        SqlField("salesOrderNumber", salesOrderHeader.orderNumber),
+        SqlField("totalDue", salesOrderHeader.totalDue),
         SqlObject("lineItems", Join(salesOrderHeader.id, salesOrderDetail.salesOrderId))
       ),
       ObjectMapping(SalesOrderDetailType)(
