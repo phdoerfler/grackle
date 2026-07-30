@@ -32,6 +32,21 @@ services:
       start_period: 5s
       start_interval: 5s
 
+  benchmark-postgres:
+    build: ./testdata/benchmark-pg
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_DB=benchmark
+      - POSTGRES_USER=benchmark
+      - POSTGRES_PASSWORD=benchmark
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U benchmark -d benchmark"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
     ports:
