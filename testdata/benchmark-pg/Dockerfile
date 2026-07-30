@@ -19,9 +19,12 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 RUN mkdir /data
-RUN curl -sL -o /data/install.sql https://raw.githubusercontent.com/lorint/AdventureWorks-for-Postgres/master/install.sql
-RUN curl -sL -o /data/update_csvs.rb https://raw.githubusercontent.com/lorint/AdventureWorks-for-Postgres/master/update_csvs.rb
-RUN curl -sL -o /data/adventure_works_2014_OLTP_script.zip https://github.com/Microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorks-oltp-install-script.zip
+# Pinned to a specific commit (not `master`) so a future image rebuild can't
+# silently pick up a schema/data change upstream. Bump this SHA deliberately,
+# not as a side effect of an unrelated rebuild.
+RUN curl -fsL -o /data/install.sql https://raw.githubusercontent.com/lorint/AdventureWorks-for-Postgres/b474991f0df1c4bf55ca4735eb0254ca0709eed2/install.sql
+RUN curl -fsL -o /data/update_csvs.rb https://raw.githubusercontent.com/lorint/AdventureWorks-for-Postgres/b474991f0df1c4bf55ca4735eb0254ca0709eed2/update_csvs.rb
+RUN curl -fsL -o /data/adventure_works_2014_OLTP_script.zip https://github.com/Microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorks-oltp-install-script.zip
 
 RUN cd /data && \
     unzip -o adventure_works_2014_OLTP_script.zip && \
