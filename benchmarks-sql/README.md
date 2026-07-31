@@ -24,7 +24,10 @@ sbt tasks below instead.
 `SqlJoinDepthBenchmark` carries explicit `@Fork(3)`, `@Warmup(iterations = 5)`, and
 `@Measurement(iterations = 10)` annotations, so a bare run above already uses settings
 sized for trustworthy results: 3 forks (a single fork would hide JIT profile pollution)
-x (5 warmup + 10 measurement) iterations x 5 `depth` params. Add `-prof gc` for
+x (5 warmup + 10 measurement) iterations x 5 `depth` params. Those annotations set
+iteration *counts* only; JMH's default iteration *time* of 10s still applies on top, so
+the bare run above costs roughly 3 x 15 x 10s x 5 = 2,250s of measurement alone, plus 15
+JVM fork launches — **approximately 40 minutes end to end**. Add `-prof gc` for
 allocation-per-operation figures, which are near-deterministic and so remain meaningful
 on a machine too noisy for trustworthy wall-clock numbers. For a quick sanity check
 while iterating on the benchmark itself, override the annotations with explicit flags,
@@ -41,10 +44,12 @@ one entry per `depth` param (2, 4, 6, 8, 10), with `SampleTime` percentiles.
 
     sbt benchmarksSql/test
 
-Runs `JoinChainSuite` (query-generator unit tests) and `AdventureWorksMappingSuite`
-(mapping/execution smoke tests) against `benchmark-postgres`, which is started
-automatically as part of the test setup. This is scoped to the `benchmarksSql`
-project deliberately — a plain, unscoped `sbt test` does not run these tests.
+Runs `JoinChainSuite` (query-generator unit tests), `AdventureWorksMappingSuite`
+(mapping/execution smoke tests), and `SqlQueryCountsSuite` (pins the query-count
+invariants below — exactly 1 query per depth, plus a weaker N+1 bound as a safety net)
+against `benchmark-postgres`, which is started automatically as part of the test setup.
+This is scoped to the `benchmarksSql` project deliberately — a plain, unscoped `sbt
+test` does not run these tests.
 
 ## Query counts (the headline metric)
 
@@ -58,6 +63,15 @@ Prints a `depth`/`queries`/`rows` table and writes `benchmarks-sql/query-counts.
 `Jmh / run`, plain `Compile / run` (what `runMain` uses) is not forked with the
 module's base directory as its working directory, so the output path is spelled out
 relative to the repo root rather than relying on sbt to resolve it.
+
+Also unlike `Jmh / run`, `runMain` has no `benchPgUp` dependency wired in `build.sbt` —
+run `sbt benchPgUp` first, or the harness will fail to connect.
+
+The `rows` column is not monotonic in `depth` (5677 at depth 7 vs. 5558 at depths
+8-10): the FR subtree has exactly 119 rows for customers with no sales orders, which
+survive through the `lineItems` join (depth 7) but are dropped once the non-null
+`product: Product!` join (depth 8) — an inner join — has nothing to match them against
+(5677 − 5558 = 119).
 
 Query counts are fully deterministic: no JIT warmup, no GC, no scheduling noise, so a
 single run needs no repetition and is exactly reproducible. That determinism is what
@@ -73,29 +87,44 @@ curve, but are not a clean measurement of Grackle's own cost in isolation:
 - Connection setup is deliberately excluded from every timed sample: `@Setup(Level.Trial)`
   allocates a pooled `HikariTransactor` once per trial (max pool size 4, see
   `BenchmarkDb.transactorResource`) and `@TearDown` releases it, so TCP connect + auth —
-  previously the largest source of non-Grackle variance — never runs inside the measured
-  region. `BenchmarkDb.transactor` still exposes an unpooled `Transactor.fromDriverManager`,
-  but that path is only used by the test suite, where timing is irrelevant; the benchmark
-  itself always goes through the pooled transactor.
+  a significant source of non-Grackle variance — never runs inside the measured region.
+  `BenchmarkDb.transactor` still exposes an unpooled `Transactor.fromDriverManager`; the
+  query-count harness (below) and the test suite both use it, since neither times
+  anything, but the benchmark itself always goes through the pooled transactor.
 - Postgres's buffer cache remains external state that JMH itself has no way to reset
   between `depth` settings, but `@Setup(Level.Trial)` deliberately prewarms it
   (`BenchmarkDb.prewarm`, backed by `pg_prewarm`) across all 11 chain tables before every
-  trial, so each `depth` value starts from a hot cache rather than an arbitrary one — the
-  chain tables total ~42MB against the default 128MB `shared_buffers`, so the whole
-  working set comfortably stays resident.
+  trial, so each `depth` value starts from a hot cache rather than an arbitrary one.
+  `pg_prewarm(regclass)` only warms a table's heap — the chain tables' heaps total ~36MB
+  of the ~42MB grand total, against the default 128MB `shared_buffers`; the remaining
+  ~6MB of indexes are not prewarmed by this call and instead get warmed incidentally
+  during warmup iterations.
 - The query is rooted at a single country region (default `FR`) rather than spanning
-  all of them, to keep the payload — and so the affordable fork/iteration counts —
-  bounded; the depth→time curve should not be read as covering the dataset's full
-  result-set size.
+  all of them, to keep the per-operation payload small. This benchmark uses
+  `Mode.SampleTime`, where each iteration is time-bounded (10s by default), so wall-clock
+  cost is `forks x iterations x iterationTime` regardless of per-operation cost — a
+  smaller payload buys no extra forks or iterations. What it does buy is more *samples*:
+  phase 1's depth-10 cost was ~354ms/op, so a 10s iteration collected only ~28 samples,
+  far too few to support the p99 this README reports elsewhere. Cutting the payload
+  roughly 10x yields hundreds of samples per iteration, which is what makes the
+  percentile numbers meaningful. The depth→time curve should not be read as covering the
+  dataset's full result-set size.
 
-## Rebuilding after a Dockerfile change
+## Rebuilding after a seed-script or Dockerfile change
 
-`docker compose up` does not rebuild a `build:`-based service when its Dockerfile
-changes, and the seeded AdventureWorks data lives in an anonymous volume that outlives
-image rebuilds. So after bumping the pinned commit SHA in
-`testdata/benchmark-pg/Dockerfile` (or otherwise changing that Dockerfile), `sbt
-benchPgUp` alone will keep using the old image and old data. Force a clean rebuild
-first:
+`testdata/benchmark-pg/install.sh` (which seeds the AdventureWorks data and, as of this
+phase, also creates the `pg_prewarm` extension) only runs on a fresh, uninitialized
+PGDATA. `docker compose up` neither rebuilds a `build:`-based service when its
+Dockerfile changes nor re-runs initdb, and the seeded data lives in an anonymous volume
+that outlives both container recreation and image rebuilds. So **anyone who ran an
+earlier phase of this benchmark and then pulls a later one** — not just after editing
+the Dockerfile — can end up with a stale volume whose seed script never ran the newer
+steps. The concrete symptom of this phase's addition specifically is `@Setup` failing
+with `function pg_prewarm(character varying) does not exist`. Fresh clones are
+unaffected — this only bites existing checkouts with an already-seeded volume, so don't
+do the rebuild dance unless you're actually upgrading one or hit that error.
+
+Force a clean rebuild:
 
     docker compose --profile benchmarks down -v benchmark-postgres
     docker compose --profile benchmarks build benchmark-postgres
