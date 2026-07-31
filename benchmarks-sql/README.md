@@ -19,13 +19,16 @@ sbt tasks below instead.
     sbt benchPgUp                      # starts benchmark-postgres; first run takes
                                         # several minutes to build the image and load
                                         # the AdventureWorks dataset
-    sbt "benchmarksSql/Jmh/run -f 1 -wi 3 -w 2s -i 5 -r 2s -rf json -rff results.json"
+    sbt "benchmarksSql/Jmh/run -rf json -rff results.json"
 
-The explicit flags above ("1 fork", "3 warm-up iterations of 2s", "5 measurement
-iterations of 2s") keep a run to a couple of minutes. JMH's own defaults (5 forks x
-(5 warmup + 5 measurement) x 10s x 5 `depth` params) take 40+ minutes here, since the
-depth-10 operation alone takes hundreds of milliseconds — fine to let run overnight,
-but use heavier settings than the ones above for any result you intend to rely on.
+`SqlJoinDepthBenchmark` carries explicit `@Fork(3)`, `@Warmup(iterations = 5)`, and
+`@Measurement(iterations = 10)` annotations, so a bare run above already uses settings
+sized for trustworthy results: 3 forks (a single fork would hide JIT profile pollution)
+x (5 warmup + 10 measurement) iterations x 5 `depth` params. Add `-prof gc` for
+allocation-per-operation figures, which are near-deterministic and so remain meaningful
+on a machine too noisy for trustworthy wall-clock numbers. For a quick sanity check
+while iterating on the benchmark itself, override the annotations with explicit flags,
+e.g. `sbt "benchmarksSql/Jmh/run -f 1 -wi 1 -i 1 -r 1s -w 1s SqlJoinDepthBenchmark"`.
 See the doc comment on `SqlJoinDepthBenchmark` for more.
 
 Results land in `benchmarks-sql/results.json` (JMH resolves the `-rff` path relative
@@ -57,6 +60,10 @@ curve, but are not a clean measurement of Grackle's own cost in isolation:
 - Postgres's own buffer cache is external state that persists across JMH `@Param`
   values within a trial; JMH has no way to reset it between `depth` settings, so later
   params in a run may benefit from pages the earlier ones already warmed.
+- The query is rooted at a single country region (default `FR`) rather than spanning
+  all of them, to keep the payload — and so the affordable fork/iteration counts —
+  bounded; the depth→time curve should not be read as covering the dataset's full
+  result-set size.
 
 ## Rebuilding after a Dockerfile change
 

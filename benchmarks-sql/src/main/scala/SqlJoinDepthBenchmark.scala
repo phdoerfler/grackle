@@ -26,22 +26,27 @@ import grackle.Mapping
 
 /**
  * Measures how Grackle's compile+execute time scales with GraphQL query nesting depth against a
- * real 11-table join chain. Requires `benchmark-postgres` to be running (`sbt benchPgUp`).
+ * real 11-table join chain, rooted at a single country region. Requires `benchmark-postgres`
+ * to be running (`sbt benchPgUp`).
  *
- * JMH's defaults (5 forks x (5 warmup + 5 measurement) iterations x 10s x 5 `depth` params) add
- * up to 40+ minutes here, since the depth-10 operation alone takes hundreds of milliseconds.
- * For a quick sanity run, pass explicit flags:
+ * The annotations above are the settings a bare run uses: 3 forks (a single fork hides JIT
+ * profile pollution) x (5 warmup + 10 measurement) iterations x 5 `depth` params.
  *
- * sbt "benchmarksSql/Jmh/run -f 1 -wi 3 -w 2s -i 5 -r 2s -rf json -rff results.json"
+ * sbt "benchmarksSql/Jmh/run -rf json -rff results.json"
  *
- * Which means "1 fork", "3 warm-up iterations of 2s", "5 measurement iterations of 2s". That
- * takes on the order of a couple of minutes and is fine for iterating on the benchmark itself,
- * but for results anyone will rely on, use heavier settings (more forks and iterations, e.g.
- * JMH's own defaults) to get a trustworthy spread.
+ * For a quick sanity check while iterating on the benchmark itself, override them:
+ *
+ * sbt "benchmarksSql/Jmh/run -f 1 -wi 1 -i 1 -r 1s -w 1s SqlJoinDepthBenchmark"
+ *
+ * Add `-prof gc` for allocation-per-operation figures, which are near-deterministic and so
+ * remain meaningful on a machine too noisy for trustworthy wall-clock numbers.
  */
 @State(Scope.Benchmark)
 @BenchmarkMode(Array(Mode.SampleTime))
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
+@Fork(3)
+@Warmup(iterations = 5)
+@Measurement(iterations = 10)
 class SqlJoinDepthBenchmark {
 
   @Param(Array("2", "4", "6", "8", "10"))
