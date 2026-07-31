@@ -62,6 +62,16 @@ ThisBuild / githubWorkflowBuild ~= { steps =>
     )
   ) ++ steps
 }
+// benchmarksSql is deliberately outside the `modules` aggregate (see the
+// comment on its project definition), so it doesn't get header/format
+// coverage from the `headerCheckAll` / `scalafmtCheckAll` steps above.
+// Cover it explicitly with a single step, gated to one matrix leg so it
+// runs once per build rather than once per (project, scala) combination.
+ThisBuild / githubWorkflowBuild += WorkflowStep.Sbt(
+  commands = List("benchmarksSql/headerCheckAll", "benchmarksSql/scalafmtCheckAll"),
+  name = Some("Check benchmarks-sql headers and formatting"),
+  cond = Some("matrix.project == 'rootJVM'")
+)
 ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
 ThisBuild / tlBspCrossProjectPlatforms := Set(JVMPlatform)
 ThisBuild / githubWorkflowPermissions := Some(Permissions.Specify.defaultRestrictive)
@@ -192,7 +202,6 @@ lazy val modules: List[CompositeProject] = List(
   unidocs,
   demo,
   benchmarks,
-  benchmarksSql,
   profile
 )
 
@@ -428,12 +437,14 @@ lazy val benchmarks = project
     coverageEnabled := false
   )
 
-// Aggregated into `modules` above so repo-wide checks (`headerCheckAll`,
-// `scalafmtCheckAll`) cover it, but its test tasks are excluded from
-// aggregation below: they require the seeded benchmark-postgres database,
-// which CI's profile-filtered `docker compose up` deliberately does not
-// start. Reachable directly via `benchmarksSql/test` and
-// `benchmarksSql/Jmh/run`.
+// Deliberately NOT included in `modules` / the root aggregate: its tests
+// require the seeded benchmark-postgres database, which CI's
+// profile-filtered `docker compose up` deliberately does not start, and
+// sbt has no mechanism to selectively exclude a single aggregated child's
+// task from aggregation (only all-or-nothing at the aggregating root).
+// Reachable directly via `benchmarksSql/test` and `benchmarksSql/Jmh/run`.
+// Its header/format checks are covered explicitly by a dedicated
+// `githubWorkflowBuild` step below rather than via aggregation.
 lazy val benchmarksSql = project
   .in(file("benchmarks-sql"))
   .dependsOn(core.jvm, doobiepg)
@@ -451,9 +462,6 @@ lazy val benchmarksSql = project
       runDocker(
         "docker compose --profile benchmarks up -d --wait --quiet-pull benchmark-postgres"
       )),
-    Test / test / aggregate := false,
-    Test / testOnly / aggregate := false,
-    Test / testQuick / aggregate := false,
     Jmh / run :=
       Def.inputTask((Jmh / run).evaluated).dependsOn(ThisBuild / benchPgUp).evaluated
   )
