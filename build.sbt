@@ -444,6 +444,9 @@ lazy val benchmarksSql = project
   .settings(
     name := "grackle-benchmarks-sql",
     coverageEnabled := false,
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "doobie-hikari" % doobieVersion
+    ),
     Test / fork := true,
     Test / parallelExecution := false,
     Test / testOptions += Tests.Setup(_ =>

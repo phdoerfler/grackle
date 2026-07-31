@@ -48,11 +48,18 @@ class SqlJoinDepthBenchmark {
   var depth: Int = _
 
   var mapping: Mapping[IO] = _
+  private var releaseTransactor: IO[Unit] = _
 
   @Setup(Level.Trial)
   def setup(): Unit = {
-    mapping = AdventureWorksMapping.mkMapping[IO](BenchmarkDb.transactor[IO])
+    val (transactor, release) = BenchmarkDb.transactorResource[IO].allocated.unsafeRunSync()
+    releaseTransactor = release
+    mapping = AdventureWorksMapping.mkMapping[IO](transactor)
   }
+
+  @TearDown(Level.Trial)
+  def teardown(): Unit =
+    releaseTransactor.unsafeRunSync()
 
   @Benchmark
   def runJoinDepthQuery(blackhole: Blackhole): Unit = {
