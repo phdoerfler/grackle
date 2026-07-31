@@ -92,4 +92,23 @@ class AdventureWorksMappingSuite extends CatsEffectSuite {
       }
     }
   }
+
+  test("max-depth query returns real data for the root codes we actually run") {
+    List(JoinChain.defaultRootCode, "US").traverse_ { code =>
+      mapping.compileAndRun(JoinChain.queryForDepth(JoinChain.maxDepth, code)).map { result =>
+        val cursor = result.hcursor
+        assert(!cursor.downField("errors").succeeded, s"GraphQL errors for $code: $result")
+
+        val regions =
+          cursor.downField("data").downField("countryRegions").focus
+            .flatMap(_.asArray)
+            .getOrElse(Vector.empty)
+
+        assertEquals(regions.size, 1, s"root filter should select exactly one region for $code")
+        assert(
+          regions.view.flatMap(cr => descend(cr, hopsWithCardinality)).headOption.isDefined,
+          s"root $code did not reach full depth — an empty benchmark looks fast")
+      }
+    }
+  }
 }

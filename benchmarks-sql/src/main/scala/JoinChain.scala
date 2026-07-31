@@ -49,7 +49,17 @@ object JoinChain {
       "category" -> "name"
     )
 
-  def queryForDepth(depth: Int): String = {
+  /**
+   * Country region codes whose join chain reaches all the way to line items. Any other code
+   * yields an empty result from depth 5 onwards, which would make a benchmark measure nothing
+   * while still appearing to succeed.
+   */
+  val fullChainRootCodes: List[String] = List("US", "AU", "CA", "GB", "DE", "FR")
+
+  /** Good branching (16 provinces) with the smallest payload (~5.6k line items). */
+  val defaultRootCode: String = "FR"
+
+  def queryForDepth(depth: Int, rootCode: String = defaultRootCode): String = {
     require(
       depth >= 1 && depth <= maxDepth,
       s"depth must be between 1 and $maxDepth, got $depth")
@@ -61,6 +71,6 @@ object JoinChain {
         case Nil => throw new IllegalStateException("unreachable: depth bounds checked above")
       }
 
-    s"query { countryRegions { countryRegionCode ${nest(hops.take(depth))} } }"
+    s"""query { countryRegions(code: "$rootCode") { countryRegionCode ${nest(hops.take(depth))} } }"""
   }
 }
