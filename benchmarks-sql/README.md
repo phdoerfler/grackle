@@ -51,15 +51,19 @@ project deliberately — a plain, unscoped `sbt test` does not run these tests.
 Numbers from this benchmark are useful for comparing the *shape* of the depth→time
 curve, but are not a clean measurement of Grackle's own cost in isolation:
 
-- Each sample uses `Transactor.fromDriverManager` (see `BenchmarkDb.scala`), which
-  opens and closes a fresh JDBC connection per invocation rather than pooling. TCP
-  connect + auth is charged to every timed sample as a roughly constant offset, which
-  does not invert the depth ordering but does mean absolute numbers overstate
-  per-query cost, and proportionally affects the shallow depths (2, 4) more than the
-  deep ones.
-- Postgres's own buffer cache is external state that persists across JMH `@Param`
-  values within a trial; JMH has no way to reset it between `depth` settings, so later
-  params in a run may benefit from pages the earlier ones already warmed.
+- Connection setup is deliberately excluded from every timed sample: `@Setup(Level.Trial)`
+  allocates a pooled `HikariTransactor` once per trial (max pool size 4, see
+  `BenchmarkDb.transactorResource`) and `@TearDown` releases it, so TCP connect + auth —
+  previously the largest source of non-Grackle variance — never runs inside the measured
+  region. `BenchmarkDb.transactor` still exposes an unpooled `Transactor.fromDriverManager`,
+  but that path is only used by the test suite, where timing is irrelevant; the benchmark
+  itself always goes through the pooled transactor.
+- Postgres's buffer cache remains external state that JMH itself has no way to reset
+  between `depth` settings, but `@Setup(Level.Trial)` deliberately prewarms it
+  (`BenchmarkDb.prewarm`, backed by `pg_prewarm`) across all 11 chain tables before every
+  trial, so each `depth` value starts from a hot cache rather than an arbitrary one — the
+  chain tables total ~42MB against the default 128MB `shared_buffers`, so the whole
+  working set comfortably stays resident.
 - The query is rooted at a single country region (default `FR`) rather than spanning
   all of them, to keep the payload — and so the affordable fork/iteration counts —
   bounded; the depth→time curve should not be read as covering the dataset's full
