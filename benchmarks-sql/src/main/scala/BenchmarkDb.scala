@@ -16,7 +16,9 @@
 package grackle.benchmarks.sql
 
 import cats.effect.{Async, Resource}
+import cats.implicits._
 import org.typelevel.doobie.hikari.{Config, HikariTransactor}
+import org.typelevel.doobie.implicits._
 import org.typelevel.doobie.util.transactor.Transactor
 
 object BenchmarkDb {
@@ -50,4 +52,30 @@ object BenchmarkDb {
         minimumIdle = maxPoolSize
       )
     )
+
+  /** The join chain's tables, schema-qualified, in traversal order. */
+  val chainTables: List[String] =
+    List(
+      "person.countryregion",
+      "person.stateprovince",
+      "person.address",
+      "person.businessentityaddress",
+      "person.person",
+      "sales.customer",
+      "sales.salesorderheader",
+      "sales.salesorderdetail",
+      "production.product",
+      "production.productsubcategory",
+      "production.productcategory"
+    )
+
+  /**
+   * Pull the chain's tables into Postgres's buffer cache. The cache is lost whenever the
+   * container restarts, so this runs per trial rather than at seed time, and must be called
+   * outside the timed region.
+   */
+  def prewarm[F[_]: Async](xa: Transactor[F]): F[Unit] =
+    chainTables.traverse_ { table =>
+      sql"SELECT pg_prewarm($table)".query[Long].unique.transact(xa)
+    }
 }
