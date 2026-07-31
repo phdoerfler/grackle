@@ -35,6 +35,7 @@ services:
   benchmark-postgres:
     build: ./testdata/benchmark-pg
     profiles: ["benchmarks"]
+    command: ["postgres", "-c", "autovacuum=off"]
     ports:
       - "5433:5432"
     environment:

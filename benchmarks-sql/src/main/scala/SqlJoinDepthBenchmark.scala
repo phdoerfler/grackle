@@ -55,6 +55,7 @@ class SqlJoinDepthBenchmark {
     val (transactor, release) = BenchmarkDb.transactorResource[IO].allocated.unsafeRunSync()
     releaseTransactor = release
     mapping = AdventureWorksMapping.mkMapping[IO](transactor)
+    BenchmarkDb.prewarm[IO](transactor).unsafeRunSync()
   }
 
   @TearDown(Level.Trial)
