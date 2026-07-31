@@ -46,6 +46,25 @@ Runs `JoinChainSuite` (query-generator unit tests) and `AdventureWorksMappingSui
 automatically as part of the test setup. This is scoped to the `benchmarksSql`
 project deliberately — a plain, unscoped `sbt test` does not run these tests.
 
+## Query counts (the headline metric)
+
+    sbt "benchmarksSql/runMain grackle.benchmarks.sql.SqlQueryCounts"
+
+Runs outside JMH entirely — it just wires `AdventureWorksMapping` up to
+`DoobieMonitor.statsMonitor` and counts how many SQL statements Grackle issues per
+`depth`, using the unpooled `BenchmarkDb.transactor` since nothing here is timed.
+Prints a `depth`/`queries`/`rows` table and writes `benchmarks-sql/query-counts.json`
+(gitignored, like `results.json`). Run it from the repo root as shown above: unlike
+`Jmh / run`, plain `Compile / run` (what `runMain` uses) is not forked with the
+module's base directory as its working directory, so the output path is spelled out
+relative to the repo root rather than relying on sbt to resolve it.
+
+Query counts are fully deterministic: no JIT warmup, no GC, no scheduling noise, so a
+single run needs no repetition and is exactly reproducible. That determinism is what
+makes them the headline number for demonstrating N+1 immunity — the depth→time curve
+below is useful for comparing *shape*, but query counts are the number that settles
+the argument outright, independent of machine noise.
+
 ## Measurement caveats
 
 Numbers from this benchmark are useful for comparing the *shape* of the depth→time
