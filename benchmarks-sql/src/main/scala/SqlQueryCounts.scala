@@ -56,6 +56,11 @@ object SqlQueryCounts extends IOApp.Simple {
             s"GraphQL errors at depth $depth for root $rootCode: $result")
           // `take` snapshots and clears atomically, so each depth is counted independently.
           stats <- monitor.take
+          _ = require(
+            stats.nonEmpty,
+            s"no SQL statements recorded at depth $depth for root $rootCode — " +
+              "a zero-query depth would silently look like perfect N+1 immunity"
+          )
         } yield DepthCount(depth, stats.size, stats.map(_.rows).sum)
       }
     }

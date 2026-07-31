@@ -57,7 +57,9 @@ object JoinChain {
   val fullChainRootCodes: List[String] = List("US", "AU", "CA", "GB", "DE", "FR")
 
   /**
-   * Good branching (16 provinces) with the smallest payload (~5.6k line items).
+   * FR has 96 state provinces, 18 of which actually carry addresses (and so branch further down
+   * the chain) — good branching with the smallest full-chain payload (~5.6k line items; see
+   * `query-counts.json`'s depth-1 row count, 96, for a cross-check on the province total).
    */
   val defaultRootCode: String = "FR"
 

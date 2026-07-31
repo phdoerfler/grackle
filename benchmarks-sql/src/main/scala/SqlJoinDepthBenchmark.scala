@@ -30,7 +30,10 @@ import grackle.Mapping
  * be running (`sbt benchPgUp`).
  *
  * The annotations above are the settings a bare run uses: 3 forks (a single fork hides JIT
- * profile pollution) x (5 warmup + 10 measurement) iterations x 5 `depth` params.
+ * profile pollution) x (5 warmup + 10 measurement) iterations x 5 `depth` params. JMH's default
+ * iteration *time* of 10s applies on top of those counts, so a bare run costs roughly 3 x 15 x
+ * 10s x 5 = 2,250s of measurement alone, plus 15 JVM fork launches — approximately 40 minutes
+ * end to end.
  *
  * sbt "benchmarksSql/Jmh/run -rf json -rff results.json"
  *
@@ -53,6 +56,9 @@ class SqlJoinDepthBenchmark {
   var depth: Int = _
 
   var mapping: Mapping[IO] = _
+  // Null until `setup` assigns it; `teardown` guards against that so a `setup` failure (e.g. the
+  // seeded database missing a function `@Setup` depends on) surfaces its own exception instead of
+  // being masked by a NullPointerException from `teardown`.
   private var releaseTransactor: IO[Unit] = _
 
   @Setup(Level.Trial)
@@ -65,7 +71,7 @@ class SqlJoinDepthBenchmark {
 
   @TearDown(Level.Trial)
   def teardown(): Unit =
-    releaseTransactor.unsafeRunSync()
+    if (releaseTransactor != null) releaseTransactor.unsafeRunSync()
 
   @Benchmark
   def runJoinDepthQuery(blackhole: Blackhole): Unit = {
