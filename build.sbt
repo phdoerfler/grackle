@@ -192,8 +192,7 @@ lazy val modules: List[CompositeProject] = List(
   unidocs,
   demo,
   benchmarks,
-  // benchmarksSql deliberately excluded: its tests require the seeded
-  // benchmark-postgres database (see benchmarksSql project def below).
+  benchmarksSql,
   profile
 )
 
@@ -429,9 +428,11 @@ lazy val benchmarks = project
     coverageEnabled := false
   )
 
-// Not aggregated into `modules` above: its tests require the seeded
-// benchmark-postgres database, which is not started as part of an ordinary
-// `sbt test`. Reachable directly via `benchmarksSql/test` and
+// Aggregated into `modules` above so repo-wide checks (`headerCheckAll`,
+// `scalafmtCheckAll`) cover it, but its test tasks are excluded from
+// aggregation below: they require the seeded benchmark-postgres database,
+// which CI's profile-filtered `docker compose up` deliberately does not
+// start. Reachable directly via `benchmarksSql/test` and
 // `benchmarksSql/Jmh/run`.
 lazy val benchmarksSql = project
   .in(file("benchmarks-sql"))
@@ -450,6 +451,9 @@ lazy val benchmarksSql = project
       runDocker(
         "docker compose --profile benchmarks up -d --wait --quiet-pull benchmark-postgres"
       )),
+    Test / test / aggregate := false,
+    Test / testOnly / aggregate := false,
+    Test / testQuick / aggregate := false,
     Jmh / run :=
       Def.inputTask((Jmh / run).evaluated).dependsOn(ThisBuild / benchPgUp).evaluated
   )
