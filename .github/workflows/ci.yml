@@ -101,6 +101,10 @@ jobs:
         if: matrix.java == 'temurin@11' && matrix.os == 'ubuntu-22.04'
         run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' doc
 
+      - name: Check benchmarks-sql headers and formatting
+        if: matrix.project == 'rootJVM'
+        run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' benchmarksSql/headerCheckAll benchmarksSql/scalafmtCheckAll
+
       - name: Make target directories
         if: github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
         run: mkdir -p modules/skunk/js/target modules/sql-core/.js/target modules/circe/.jvm/target modules/generic/.jvm/target modules/doobie-pg/target unidocs/target modules/core/.native/target modules/skunk/jvm/target modules/core/.js/target modules/doobie-core/target modules/circe/.js/target modules/skunk/native/target modules/generic/.js/target modules/doobie-oracle/target modules/sql-core/.jvm/target modules/core/.jvm/target modules/sql-pg/native/target modules/doobie-mssql/target modules/sql-pg/js/target modules/circe/.native/target modules/generic/.native/target modules/sql-pg/jvm/target modules/sql-core/.native/target project/target
@@ -278,7 +282,7 @@ jobs:
       - name: Submit Dependencies
         uses: scalacenter/sbt-dependency-submission@v2
         with:
-          modules-ignore: grackle-demo_2.13 grackle-demo_3 benchmarks_2.13 benchmarks_3 rootjs_2.13 rootjs_3 docs_2.13 docs_3 buildinfo_native0.5_2.13 buildinfo_native0.5_3 buildinfo_sjs1_2.13 buildinfo_sjs1_3 profile_2.13 profile_3 rootjvm_2.13 rootjvm_3 rootnative_2.13 rootnative_3 buildinfo_2.13 buildinfo_3 repodocs_2.13 repodocs_3
+          modules-ignore: grackle-demo_2.13 grackle-demo_3 benchmarks_2.13 benchmarks_3 grackle-benchmarks-sql_2.13 grackle-benchmarks-sql_3 rootjs_2.13 rootjs_3 docs_2.13 docs_3 buildinfo_native0.5_2.13 buildinfo_native0.5_3 buildinfo_sjs1_2.13 buildinfo_sjs1_3 profile_2.13 profile_3 rootjvm_2.13 rootjvm_3 rootnative_2.13 rootnative_3 buildinfo_2.13 buildinfo_3 repodocs_2.13 repodocs_3
           configs-ignore: test scala-tool scala-doc-tool test-internal
 
   coverage:
