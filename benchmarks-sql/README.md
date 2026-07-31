@@ -59,7 +59,10 @@ Runs outside JMH entirely — it just wires `AdventureWorksMapping` up to
 `DoobieMonitor.statsMonitor` and counts how many SQL statements Grackle issues per
 `depth`, using the unpooled `BenchmarkDb.transactor` since nothing here is timed.
 Prints a `depth`/`queries`/`rows` table and writes `benchmarks-sql/query-counts.json`
-(gitignored, like `results.json`). Run it from the repo root as shown above: unlike
+(gitignored, like `results.json`). It also writes `benchmarks-sql/query-sql.txt`
+(gitignored too, diagnostic-only, not a published metric): the normalized text of every
+SQL statement Grackle emitted at each depth, one labelled section per depth — see
+`SqlQueryCounts.renderSql`. Run it from the repo root as shown above: unlike
 `Jmh / run`, plain `Compile / run` (what `runMain` uses) is not forked with the
 module's base directory as its working directory, so the output path is spelled out
 relative to the repo root rather than relying on sbt to resolve it.
@@ -68,10 +71,20 @@ Also unlike `Jmh / run`, `runMain` has no `benchPgUp` dependency wired in `build
 run `sbt benchPgUp` first, or the harness will fail to connect.
 
 The `rows` column reports the total rows Grackle's SQL fetched at each depth, and it is
-not monotonic in `depth`: depth 7 fetches 5,677 rows while depths 8-10 fetch 5,558. This
-reflects how the join's shape changes as deeper levels are added — it has nothing to do
-with query count, which stays at 1 throughout (see below). The exact mechanism behind
-the drop has not been established.
+not monotonic in `depth`: depth 7 fetches 5,677 rows while depths 8-10 fetch 5,558.
+`query-sql.txt` settles the mechanism: every join up through depth 7 (down to
+`SalesOrderDetail`) is a `LEFT JOIN`, so the depth-7 query returns one row per FR
+line item (5,558) *plus* one null-padded row for every upstream chain that never
+reaches an order — 78 FR state provinces with no address, 40 addresses with no person,
+and 1 person with no customer (78+40+1 = 119; 5,558+119 = 5,677, both confirmed by
+running the captured depth-7 SQL directly against the fixture). Depth 8 adds
+`INNER JOIN production.product ON product.productid = salesorderdetail.productid` —
+the first `INNER JOIN` anywhere in the chain — which drops all 119 null-padded rows
+(their `salesorderdetail`, and so `productid`, is `NULL`, and `NULL` never satisfies an
+inner join's equality predicate), landing back on the true count of 5,558. That figure
+holds through depths 9-10 because none of FR's specific products or subcategories
+happen to be among the catalog-wide products lacking a subcategory. This has nothing to
+do with query count, which stays at 1 throughout (see below).
 
 Query counts are fully deterministic: no JIT warmup, no GC, no scheduling noise, so a
 single run needs no repetition and is exactly reproducible. That determinism is what
