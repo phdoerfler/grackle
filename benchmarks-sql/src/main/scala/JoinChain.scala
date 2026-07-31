@@ -63,19 +63,30 @@ object JoinChain {
    */
   val defaultRootCode: String = "FR"
 
-  def queryForDepth(depth: Int, rootCode: String = defaultRootCode): String = {
+  private def nest(remaining: List[String]): String =
+    remaining match {
+      case field :: Nil => s"$field { ${leafField(field)} }"
+      case field :: rest => s"$field { ${nest(rest)} }"
+      case Nil => throw new IllegalStateException("unreachable: depth bounds checked above")
+    }
+
+  private def requireValidDepth(depth: Int): Unit =
     require(
       depth >= 1 && depth <= maxDepth,
       s"depth must be between 1 and $maxDepth, got $depth")
 
-    def nest(remaining: List[String]): String =
-      remaining match {
-        case field :: Nil => s"$field { ${leafField(field)} }"
-        case field :: rest => s"$field { ${nest(rest)} }"
-        case Nil => throw new IllegalStateException("unreachable: depth bounds checked above")
-      }
-
+  def queryForDepth(depth: Int, rootCode: String = defaultRootCode): String = {
+    requireValidDepth(depth)
     s"""query { countryRegions(code: "$rootCode") { countryRegionCode ${nest(
         hops.take(depth))} } }"""
+  }
+
+  /**
+   * The same chain with no root filter: every country region, fanning out fully. Far more rows
+   * than the filtered form, which is the point — the query count should not move.
+   */
+  def queryForDepthUnfiltered(depth: Int): String = {
+    requireValidDepth(depth)
+    s"query { countryRegions { countryRegionCode ${nest(hops.take(depth))} } }"
   }
 }

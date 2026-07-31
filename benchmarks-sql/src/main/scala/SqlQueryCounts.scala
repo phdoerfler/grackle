@@ -52,26 +52,44 @@ object SqlQueryCounts extends IOApp.Simple {
   // applies: written relative to the repo root, not the module base directory.
   val sqlOutputPath: String = "benchmarks-sql/query-sql.txt"
 
-  def countsFor(rootCode: String): IO[List[DepthCount]] =
+  /**
+   * Shared counting body for both the filtered and unfiltered paths: they differ only in which
+   * query string is built per depth and in the label used for failure messages.
+   */
+  private def countsForQuery(
+      label: String,
+      queryForDepth: Int => String): IO[List[DepthCount]] =
     DoobieMonitor.statsMonitor[IO].flatMap { monitor =>
       val mapping = AdventureWorksMapping.mkMapping[IO](BenchmarkDb.transactor[IO], monitor)
 
       (1 to JoinChain.maxDepth).toList.traverse { depth =>
         for {
-          result <- mapping.compileAndRun(JoinChain.queryForDepth(depth, rootCode))
+          result <- mapping.compileAndRun(queryForDepth(depth))
           _ = require(
             !result.hcursor.downField("errors").succeeded,
-            s"GraphQL errors at depth $depth for root $rootCode: $result")
+            s"GraphQL errors at depth $depth for $label: $result")
           // `take` snapshots and clears atomically, so each depth is counted independently.
           stats <- monitor.take
           _ = require(
             stats.nonEmpty,
-            s"no SQL statements recorded at depth $depth for root $rootCode — " +
+            s"no SQL statements recorded at depth $depth for $label — " +
               "a zero-query depth would silently look like perfect N+1 immunity"
           )
         } yield DepthCount(depth, stats.size, stats.map(_.rows).sum, stats.map(_.normalize.sql))
       }
     }
+
+  def countsFor(rootCode: String): IO[List[DepthCount]] =
+    countsForQuery(s"root $rootCode", depth => JoinChain.queryForDepth(depth, rootCode))
+
+  /**
+   * Every country region, unfiltered — ~238 regions and ~60k rows at the deeper depths, versus
+   * ~5.6k for a single filtered region. The query count should not move: that invariance is the
+   * whole point of measuring it against a workload nothing about the query shape was chosen to
+   * flatter.
+   */
+  def countsForUnfiltered: IO[List[DepthCount]] =
+    countsForQuery("unfiltered root", JoinChain.queryForDepthUnfiltered)
 
   def render(rootCode: String, counts: List[DepthCount]): Json =
     Json.obj(
@@ -83,6 +101,37 @@ object SqlQueryCounts extends IOApp.Simple {
           "rows" -> Json.fromInt(c.rows)
         )
       }: _*)
+    )
+
+  /**
+   * Same shape as `render`, but explicitly labelled `scope` rather than `rootCode` — there is
+   * no root code to report, since this dataset spans every country region unfiltered.
+   */
+  def renderUnfiltered(counts: List[DepthCount]): Json =
+    Json.obj(
+      "scope" -> Json.fromString("unfiltered (all country regions)"),
+      "counts" -> Json.arr(counts.map { c =>
+        Json.obj(
+          "depth" -> Json.fromInt(c.depth),
+          "queries" -> Json.fromInt(c.queries),
+          "rows" -> Json.fromInt(c.rows)
+        )
+      }: _*)
+    )
+
+  /**
+   * Combines both datasets under distinctly-named top-level keys so a reader looking only at
+   * `query-counts.json` can tell them apart without cross-referencing this source file:
+   * `filtered` keeps `render`'s existing shape (labelled by `rootCode`), `unfiltered` is
+   * labelled explicitly via `scope`.
+   */
+  def renderAll(
+      rootCode: String,
+      filtered: List[DepthCount],
+      unfiltered: List[DepthCount]): Json =
+    Json.obj(
+      "filtered" -> render(rootCode, filtered),
+      "unfiltered" -> renderUnfiltered(unfiltered)
     )
 
   /**
@@ -106,17 +155,24 @@ object SqlQueryCounts extends IOApp.Simple {
       }
       .mkString("\n\n")
 
+  private def printTable(label: String, counts: List[DepthCount]): IO[Unit] =
+    IO.println(label) *>
+      counts.traverse_(c =>
+        IO.println(f"depth ${c.depth}%2d  queries ${c.queries}%3d  rows ${c.rows}%7d")) *>
+      IO.println("")
+
   def run: IO[Unit] =
     for {
-      counts <- countsFor(JoinChain.defaultRootCode)
-      json = render(JoinChain.defaultRootCode, counts)
+      filtered <- countsFor(JoinChain.defaultRootCode)
+      unfiltered <- countsForUnfiltered
+      json = renderAll(JoinChain.defaultRootCode, filtered, unfiltered)
       _ <- IO.blocking(Files.write(Paths.get(outputPath), json.spaces2.getBytes("UTF-8")))
       _ <- IO.blocking(
         Files.write(
           Paths.get(sqlOutputPath),
-          (renderSql(JoinChain.defaultRootCode, counts) + "\n").getBytes("UTF-8")))
-      _ <- counts.traverse_(c =>
-        IO.println(f"depth ${c.depth}%2d  queries ${c.queries}%3d  rows ${c.rows}%7d"))
+          (renderSql(JoinChain.defaultRootCode, filtered) + "\n").getBytes("UTF-8")))
+      _ <- printTable(s"Filtered (root ${JoinChain.defaultRootCode}):", filtered)
+      _ <- printTable("Unfiltered (all country regions):", unfiltered)
       _ <- IO.println(s"wrote $outputPath")
       _ <- IO.println(s"wrote $sqlOutputPath")
     } yield ()
