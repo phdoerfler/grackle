@@ -76,8 +76,7 @@ object SqlQueryCounts extends IOApp.Simple {
     for {
       counts <- countsFor(JoinChain.defaultRootCode)
       json = render(JoinChain.defaultRootCode, counts)
-      _ <- IO.blocking(
-        Files.write(Paths.get(outputPath), json.spaces2.getBytes("UTF-8")))
+      _ <- IO.blocking(Files.write(Paths.get(outputPath), json.spaces2.getBytes("UTF-8")))
       _ <- counts.traverse_(c =>
         IO.println(f"depth ${c.depth}%2d  queries ${c.queries}%3d  rows ${c.rows}%7d"))
       _ <- IO.println(s"wrote $outputPath")

@@ -100,14 +100,18 @@ class AdventureWorksMappingSuite extends CatsEffectSuite {
         assert(!cursor.downField("errors").succeeded, s"GraphQL errors for $code: $result")
 
         val regions =
-          cursor.downField("data").downField("countryRegions").focus
+          cursor
+            .downField("data")
+            .downField("countryRegions")
+            .focus
             .flatMap(_.asArray)
             .getOrElse(Vector.empty)
 
         assertEquals(regions.size, 1, s"root filter should select exactly one region for $code")
         assert(
           regions.view.flatMap(cr => descend(cr, hopsWithCardinality)).headOption.isDefined,
-          s"root $code did not reach full depth — an empty benchmark looks fast")
+          s"root $code did not reach full depth — an empty benchmark looks fast"
+        )
       }
     }
   }

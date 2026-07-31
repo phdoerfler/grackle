@@ -53,7 +53,9 @@ object BenchmarkDb {
       )
     )
 
-  /** The join chain's tables, schema-qualified, in traversal order. */
+  /**
+   * The join chain's tables, schema-qualified, in traversal order.
+   */
   val chainTables: List[String] =
     List(
       "person.countryregion",

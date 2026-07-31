@@ -26,8 +26,8 @@ import grackle.Mapping
 
 /**
  * Measures how Grackle's compile+execute time scales with GraphQL query nesting depth against a
- * real 11-table join chain, rooted at a single country region. Requires `benchmark-postgres`
- * to be running (`sbt benchPgUp`).
+ * real 11-table join chain, rooted at a single country region. Requires `benchmark-postgres` to
+ * be running (`sbt benchPgUp`).
  *
  * The annotations above are the settings a bare run uses: 3 forks (a single fork hides JIT
  * profile pollution) x (5 warmup + 10 measurement) iterations x 5 `depth` params.
