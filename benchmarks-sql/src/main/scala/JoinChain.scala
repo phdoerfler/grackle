@@ -56,7 +56,9 @@ object JoinChain {
    */
   val fullChainRootCodes: List[String] = List("US", "AU", "CA", "GB", "DE", "FR")
 
-  /** Good branching (16 provinces) with the smallest payload (~5.6k line items). */
+  /**
+   * Good branching (16 provinces) with the smallest payload (~5.6k line items).
+   */
   val defaultRootCode: String = "FR"
 
   def queryForDepth(depth: Int, rootCode: String = defaultRootCode): String = {
@@ -71,6 +73,7 @@ object JoinChain {
         case Nil => throw new IllegalStateException("unreachable: depth bounds checked above")
       }
 
-    s"""query { countryRegions(code: "$rootCode") { countryRegionCode ${nest(hops.take(depth))} } }"""
+    s"""query { countryRegions(code: "$rootCode") { countryRegionCode ${nest(
+        hops.take(depth))} } }"""
   }
 }
