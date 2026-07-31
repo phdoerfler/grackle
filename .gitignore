@@ -69,7 +69,9 @@ query*.sql
 # results.json is JMH's own result output (`benchmarksSql/Jmh/run`), written relative to the
 # module's base directory. query-counts.json is the separate SQL query-count harness's output
 # (`benchmarksSql/runMain grackle.benchmarks.sql.SqlQueryCounts`), written relative to the repo
-# root instead — see that object's `outputPath` doc comment. Both paths coincide here only
-# because the module's base directory is itself repo-root/benchmarks-sql.
+# root instead — see that object's `outputPath` doc comment. query-sql.txt is the same harness's
+# diagnostic SQL dump (see `sqlOutputPath`), same root-relative caveat. All three paths coincide
+# here only because the module's base directory is itself repo-root/benchmarks-sql.
 /benchmarks-sql/results.json
 /benchmarks-sql/query-counts.json
+/benchmarks-sql/query-sql.txt

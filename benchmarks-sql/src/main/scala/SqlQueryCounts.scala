@@ -35,7 +35,10 @@ import grackle.doobie.DoobieMonitor
  */
 object SqlQueryCounts extends IOApp.Simple {
 
-  final case class DepthCount(depth: Int, queries: Int, rows: Int)
+  // `sql` carries the normalized (whitespace-collapsed) text of every SQL statement Grackle
+  // emitted at this depth — diagnostic only, and not part of the pinned query-count invariants
+  // (`queries`, `rows`) that `SqlQueryCountsSuite` checks.
+  final case class DepthCount(depth: Int, queries: Int, rows: Int, sql: List[String])
 
   // Unlike `Jmh / run`, plain `Compile / run` (what `runMain` uses) is not forked with the
   // module's base directory as its working directory — it inherits sbt's own cwd, the build
@@ -43,6 +46,11 @@ object SqlQueryCounts extends IOApp.Simple {
   // invocation (`sbt "benchmarksSql/runMain ..."`, run from the repo root) and mirroring
   // where `.gitignore` expects the file to land.
   val outputPath: String = "benchmarks-sql/query-counts.json"
+
+  // Diagnostic dump of the emitted SQL itself, kept separate from `outputPath` (the published
+  // query-counts.json metric) — see this object's doc comment. Same working-directory caveat
+  // applies: written relative to the repo root, not the module base directory.
+  val sqlOutputPath: String = "benchmarks-sql/query-sql.txt"
 
   def countsFor(rootCode: String): IO[List[DepthCount]] =
     DoobieMonitor.statsMonitor[IO].flatMap { monitor =>
@@ -61,7 +69,7 @@ object SqlQueryCounts extends IOApp.Simple {
             s"no SQL statements recorded at depth $depth for root $rootCode — " +
               "a zero-query depth would silently look like perfect N+1 immunity"
           )
-        } yield DepthCount(depth, stats.size, stats.map(_.rows).sum)
+        } yield DepthCount(depth, stats.size, stats.map(_.rows).sum, stats.map(_.normalize.sql))
       }
     }
 
@@ -77,13 +85,39 @@ object SqlQueryCounts extends IOApp.Simple {
       }: _*)
     )
 
+  /**
+   * Render one clearly-delimited, depth-labelled section per depth, each containing every SQL
+   * statement Grackle emitted at that depth (normalized). Diagnostic only — this is what backs
+   * `sqlOutputPath`, not `outputPath`.
+   */
+  def renderSql(rootCode: String, counts: List[DepthCount]): String =
+    counts
+      .map { c =>
+        val header = s"-- depth ${c.depth}, root $rootCode " + "-" * 40
+        val body = c
+          .sql
+          .zipWithIndex
+          .map {
+            case (sql, i) if c.sql.size > 1 => s"-- statement ${i + 1} of ${c.sql.size}\n$sql"
+            case (sql, _) => sql
+          }
+          .mkString("\n\n")
+        s"$header\n$body"
+      }
+      .mkString("\n\n")
+
   def run: IO[Unit] =
     for {
       counts <- countsFor(JoinChain.defaultRootCode)
       json = render(JoinChain.defaultRootCode, counts)
       _ <- IO.blocking(Files.write(Paths.get(outputPath), json.spaces2.getBytes("UTF-8")))
+      _ <- IO.blocking(
+        Files.write(
+          Paths.get(sqlOutputPath),
+          (renderSql(JoinChain.defaultRootCode, counts) + "\n").getBytes("UTF-8")))
       _ <- counts.traverse_(c =>
         IO.println(f"depth ${c.depth}%2d  queries ${c.queries}%3d  rows ${c.rows}%7d"))
       _ <- IO.println(s"wrote $outputPath")
+      _ <- IO.println(s"wrote $sqlOutputPath")
     } yield ()
 }
