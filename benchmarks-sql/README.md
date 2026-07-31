@@ -67,11 +67,11 @@ relative to the repo root rather than relying on sbt to resolve it.
 Also unlike `Jmh / run`, `runMain` has no `benchPgUp` dependency wired in `build.sbt` —
 run `sbt benchPgUp` first, or the harness will fail to connect.
 
-The `rows` column is not monotonic in `depth` (5677 at depth 7 vs. 5558 at depths
-8-10): the FR subtree has exactly 119 rows for customers with no sales orders, which
-survive through the `lineItems` join (depth 7) but are dropped once the non-null
-`product: Product!` join (depth 8) — an inner join — has nothing to match them against
-(5677 − 5558 = 119).
+The `rows` column reports the total rows Grackle's SQL fetched at each depth, and it is
+not monotonic in `depth`: depth 7 fetches 5,677 rows while depths 8-10 fetch 5,558. This
+reflects how the join's shape changes as deeper levels are added — it has nothing to do
+with query count, which stays at 1 throughout (see below). The exact mechanism behind
+the drop has not been established.
 
 Query counts are fully deterministic: no JIT warmup, no GC, no scheduling noise, so a
 single run needs no repetition and is exactly reproducible. That determinism is what
