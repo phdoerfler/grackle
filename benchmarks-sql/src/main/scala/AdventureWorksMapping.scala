@@ -20,6 +20,10 @@ import org.typelevel.doobie.util.meta.Meta
 import org.typelevel.doobie.util.transactor.Transactor
 
 import grackle._
+import grackle.Predicate._
+import grackle.Query._
+import grackle.QueryCompiler._
+import grackle.Value._
 import grackle.doobie.{DoobieMappingCompanion, DoobieMonitor}
 import grackle.doobie.postgres.DoobiePgMapping
 import grackle.syntax._
@@ -98,7 +102,7 @@ trait AdventureWorksMapping[F[_]] extends AdventureWorksSchema[F] {
   val schema =
     schema"""
       type Query {
-        countryRegions: [CountryRegion!]!
+        countryRegions(code: String): [CountryRegion!]!
       }
       type CountryRegion {
         countryRegionCode: String!
@@ -232,6 +236,15 @@ trait AdventureWorksMapping[F[_]] extends AdventureWorksSchema[F] {
         SqlField("name", productCategory.name)
       )
     )
+
+  override val selectElaborator = SelectElaborator {
+    case (QueryType, "countryRegions", List(Binding("code", AbsentValue))) =>
+      Elab.unit
+
+    case (QueryType, "countryRegions", List(Binding("code", StringValue(code)))) =>
+      Elab.transformChild(child =>
+        Filter(Eql(CountryRegionType / "countryRegionCode", Const(code)), child))
+  }
 }
 
 object AdventureWorksMapping extends DoobieMappingCompanion {

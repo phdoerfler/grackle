@@ -41,4 +41,20 @@ class JoinChainSuite extends munit.FunSuite {
   test("depth above maxDepth is rejected") {
     intercept[IllegalArgumentException](JoinChain.queryForDepth(JoinChain.maxDepth + 1))
   }
+
+  test("queryForDepth filters the root by the default country code") {
+    val q = JoinChain.queryForDepth(2)
+    assert(q.contains("""countryRegions(code: "FR")"""), s"missing root filter in: $q")
+  }
+
+  test("queryForDepth accepts an explicit root code") {
+    val q = JoinChain.queryForDepth(2, "US")
+    assert(q.contains("""countryRegions(code: "US")"""), s"missing root filter in: $q")
+    assertEquals(q.count(_ == '{'), q.count(_ == '}'))
+  }
+
+  test("the documented full-chain root codes are the vetted six") {
+    assertEquals(JoinChain.fullChainRootCodes.toSet, Set("US", "AU", "CA", "GB", "DE", "FR"))
+    assert(JoinChain.fullChainRootCodes.contains(JoinChain.defaultRootCode))
+  }
 }
