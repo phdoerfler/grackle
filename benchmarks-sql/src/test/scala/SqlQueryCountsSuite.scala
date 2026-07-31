@@ -63,4 +63,25 @@ class SqlQueryCountsSuite extends CatsEffectSuite {
       }
     }
   }
+
+  test("an unfiltered root still emits exactly one SQL query per depth") {
+    SqlQueryCounts.countsForUnfiltered.map { counts =>
+      assertEquals(counts.map(_.depth), (1 to JoinChain.maxDepth).toList)
+      counts.foreach { c =>
+        assertEquals(
+          c.queries,
+          1,
+          s"depth ${c.depth} emitted ${c.queries} queries for an unfiltered root")
+      }
+    }
+  }
+
+  test("the unfiltered root really is a larger workload than a single region") {
+    for {
+      filtered <- SqlQueryCounts.countsFor(JoinChain.defaultRootCode)
+      unfiltered <- SqlQueryCounts.countsForUnfiltered
+    } yield assert(
+      unfiltered.map(_.rows).sum > filtered.map(_.rows).sum,
+      "unfiltered should fetch more rows, else the comparison proves nothing")
+  }
 }
