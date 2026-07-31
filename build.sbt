@@ -441,13 +441,10 @@ lazy val benchmarks = project
   )
 
 // Deliberately NOT included in `modules` / the root aggregate: its tests
-// require the seeded benchmark-postgres database, which CI's
-// profile-filtered `docker compose up` deliberately does not start, and
-// sbt has no mechanism to selectively exclude a single aggregated child's
-// task from aggregation (only all-or-nothing at the aggregating root).
-// Reachable directly via `benchmarksSql/test` and `benchmarksSql/Jmh/run`.
-// Its header/format checks are covered explicitly by a dedicated
-// `githubWorkflowBuild` step below rather than via aggregation.
+// require the seeded benchmark-postgres database, which CI does not start.
+// Its header/format checks are covered by a dedicated githubWorkflowBuild
+// step near the top of this file. Warning: aggregate := false will NOT work
+// here (sbt evaluates aggregate at the aggregating node, not leaf projects).
 lazy val benchmarksSql = project
   .in(file("benchmarks-sql"))
   .dependsOn(core.jvm, doobiepg)
