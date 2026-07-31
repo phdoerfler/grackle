@@ -39,17 +39,17 @@ import grackle.doobie.DoobieMonitor
  *   - Arm A (`runFullGrackle`) is `SqlJoinDepthBenchmark`'s existing measurement:
  *     `mapping.compileAndRun(query).unsafeRunSync()`.
  *   - Arm B (`runRawJdbc`) executes the SQL Grackle itself emitted for this depth via plain
- *     JDBC — bypassing doobie's `Read`/`Query0` decoding, not just Grackle's own layer — reading
- *     every column of every row into a `Blackhole`.
+ *     JDBC — bypassing doobie's `Read`/`Query0` decoding, not just Grackle's own layer —
+ *     reading every column of every row into a `Blackhole`.
  *
  * Arm A minus Arm B is attributable to Grackle's own work, since both arms move identical rows
  * off identical SQL in the same JVM.
  *
- * The SQL is captured programmatically in `@Setup`, not hand-copied: a second, monitored mapping
- * sharing this trial's transactor runs the depth's query once through `DoobieMonitor.statsMonitor`,
- * and `SqlStats.sql` / `SqlStats.args` are read back. This keeps both arms honest if the mapping
- * or query shape ever changes, and lets `@Setup` assert Arm B's row count against Grackle's own
- * `SqlStats.rows` before any timed sample runs.
+ * The SQL is captured programmatically in `@Setup`, not hand-copied: a second, monitored
+ * mapping sharing this trial's transactor runs the depth's query once through
+ * `DoobieMonitor.statsMonitor`, and `SqlStats.sql` / `SqlStats.args` are read back. This keeps
+ * both arms honest if the mapping or query shape ever changes, and lets `@Setup` assert Arm B's
+ * row count against Grackle's own `SqlStats.rows` before any timed sample runs.
  *
  * Diagnostic only — depth 10 (the full join chain), one param, short iteration counts. Requires
  * `benchmark-postgres` to be running (`sbt benchPgUp`).
@@ -118,8 +118,8 @@ class RawVsGrackleBenchmark {
 
   /**
    * Executes `capturedSql` via plain JDBC (doobie's raw-connection escape hatch, `FC.raw`), NOT
-   * doobie's `Read`/`Query0` decoding, and feeds every column of every row to `consume`. Returns
-   * the row count so `setup` can cross-check it against Grackle's own report.
+   * doobie's `Read`/`Query0` decoding, and feeds every column of every row to `consume`.
+   * Returns the row count so `setup` can cross-check it against Grackle's own report.
    */
   private def runRaw(consume: Any => Unit): Int = {
     val io: ConnectionIO[Int] = FC.raw { conn =>
@@ -145,7 +145,9 @@ class RawVsGrackleBenchmark {
     io.transact(transactor).unsafeRunSync()
   }
 
-  /** Arm A: full Grackle, exactly as `SqlJoinDepthBenchmark.runJoinDepthQuery` measures it. */
+  /**
+   * Arm A: full Grackle, exactly as `SqlJoinDepthBenchmark.runJoinDepthQuery` measures it.
+   */
   @Benchmark
   def runFullGrackle(blackhole: Blackhole): Unit = {
     val query = JoinChain.queryForDepth(depth)
@@ -153,7 +155,9 @@ class RawVsGrackleBenchmark {
     blackhole.consume(result)
   }
 
-  /** Arm B: the JDBC floor underneath Arm A — same SQL, same connection pool, no Grackle. */
+  /**
+   * Arm B: the JDBC floor underneath Arm A — same SQL, same connection pool, no Grackle.
+   */
   @Benchmark
   def runRawJdbc(blackhole: Blackhole): Unit = {
     val rows = runRaw(v => blackhole.consume(v))
