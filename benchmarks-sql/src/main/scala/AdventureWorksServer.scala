@@ -29,8 +29,8 @@ import grackle.Mapping
 import grackle.doobie.DoobieMonitor
 
 /**
- * Ad-hoc HTTP server exposing `AdventureWorksMapping` so a human can poke at it with Postman (or
- * curl) instead of only reaching it via benchmarks and tests.
+ * Ad-hoc HTTP server exposing `AdventureWorksMapping` so a human can poke at it with Postman
+ * (or curl) instead of only reaching it via benchmarks and tests.
  *
  * Not part of the benchmark or test suites, and not wired into CI beyond format/header checks —
  * `benchmarksSql` is deliberately outside the `modules` aggregate (see the comment on
@@ -62,8 +62,10 @@ object AdventureWorksServer extends IOApp {
       }
 
     object QueryMatcher extends QueryParamDecoderMatcher[String]("query")
-    object OperationNameMatcher extends OptionalQueryParamDecoderMatcher[String]("operationName")
-    object VariablesMatcher extends OptionalValidatingQueryParamDecoderMatcher[Json]("variables")
+    object OperationNameMatcher
+        extends OptionalQueryParamDecoderMatcher[String]("operationName")
+    object VariablesMatcher
+        extends OptionalValidatingQueryParamDecoderMatcher[Json]("variables")
 
     HttpRoutes.of[IO] {
       // GraphQL query is embedded in the URI query string when queried via GET
