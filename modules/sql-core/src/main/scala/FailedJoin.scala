@@ -18,4 +18,15 @@ package grackle.sql
 /**
  * A sentinal value representing the empty column values from a failed join.
  */
-case object FailedJoin
+case object FailedJoin {
+
+  /**
+   * Reference-equality check for the `FailedJoin` sentinel.
+   *
+   * Column values are `Any` and may be a `scala.math.BigDecimal`, whose `equals` throws and
+   * catches an `ArithmeticException` whenever compared to a value of another type (see
+   * `BigDecimal.isValidLong`). Since `FailedJoin` is a singleton, reference equality is exact
+   * and avoids ever calling into a `BigDecimal`'s `equals` for this check.
+   */
+  def isFailedJoin(v: Any): Boolean = v.asInstanceOf[AnyRef] eq FailedJoin
+}
