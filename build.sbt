@@ -453,6 +453,7 @@ lazy val benchmarksSql = project
   .settings(
     name := "grackle-benchmarks-sql",
     coverageEnabled := false,
+    Compile / run / fork := true,
     libraryDependencies ++= Seq(
       "org.typelevel" %% "doobie-hikari" % doobieVersion,
       "org.http4s" %% "http4s-ember-server" % http4sVersion,
