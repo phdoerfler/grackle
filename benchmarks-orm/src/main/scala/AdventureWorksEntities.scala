@@ -120,7 +120,15 @@ class BusinessEntityAddressEntity {
   // Matches Grackle's own mapping (`Join(businessEntityAddress.businessEntityId,
   // person.businessEntityId)`), which joins directly to `person`, skipping the unused
   // `BusinessEntity` supertype table AdventureWorks defines but this chain never queries.
-  @ManyToOne(fetch = FetchType.LAZY, optional = false)
+  //
+  // `optional = true`: AdventureWorks shares one BusinessEntity id space across Person, Store,
+  // and Vendor, and 816 of 19614 businessentityaddress rows (live-verified) have a
+  // businessentityid that belongs to a Store/Vendor, not a Person — legitimate data, not
+  // corruption. Grackle's own GraphQL schema already models this hop as nullable
+  // (`person: Person`, no `!`); `optional = false` here would assert a cardinality guarantee
+  // neither the schema nor the data actually has, and makes Hibernate throw
+  // EntityNotFoundException instead of quietly resolving to null on dereference.
+  @ManyToOne(fetch = FetchType.LAZY, optional = true)
   @MapsId("businessEntityId")
   @JoinColumn(name = "businessentityid")
   var person: PersonEntity = _
