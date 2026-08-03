@@ -45,7 +45,8 @@ object GrackleShapeQuery {
   private def nestWide(remaining: List[String]): String =
     remaining match {
       case field :: Nil => s"$field { ${wideLeafFields(field).mkString(" ")} }"
-      case field :: rest => s"$field { ${wideLeafFields(field).mkString(" ")} ${nestWide(rest)} }"
+      case field :: rest =>
+        s"$field { ${wideLeafFields(field).mkString(" ")} ${nestWide(rest)} }"
       case Nil => throw new IllegalStateException("unreachable: depth bounds checked by Shape")
     }
 
