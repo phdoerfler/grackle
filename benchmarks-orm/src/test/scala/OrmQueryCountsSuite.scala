@@ -17,19 +17,20 @@ package grackle.benchmarks.orm
 
 import scala.concurrent.duration._
 
-import cats.effect.IO
 import munit.CatsEffectSuite
 
 class OrmQueryCountsSuite extends CatsEffectSuite {
   override val munitIOTimeout: Duration = 5.minutes
 
-  test("grackle arm statement count is 1 at every shape; naive is not; eager's tuned shapes beat naive") {
+  test(
+    "grackle arm statement count is 1 at every shape; naive is not; eager's tuned shapes beat naive") {
     for {
       grackle <- OrmQueryCounts.countGrackle
       naive <- OrmQueryCounts.countOrm(NaiveOrmArm.run)
       eager <- OrmQueryCounts.countOrm(EagerOrmArm.run)
     } yield {
-      grackle.foreach(c => assertEquals(c.statements, 1, s"grackle shape ${c.shape} was not 1 query"))
+      grackle.foreach(c =>
+        assertEquals(c.statements, 1, s"grackle shape ${c.shape} was not 1 query"))
 
       OrmQueryShapes.all.foreach { shape =>
         val naiveCount = naive.find(_.shape == shape.name).get.statements
