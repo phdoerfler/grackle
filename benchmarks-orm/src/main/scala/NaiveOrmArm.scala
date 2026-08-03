@@ -1,0 +1,102 @@
+// Copyright (c) 2016-2025 Association of Universities for Research in Astronomy, Inc. (AURA)
+// Copyright (c) 2016-2025 Grackle Contributors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package grackle.benchmarks.orm
+
+import scala.jdk.CollectionConverters._
+
+import jakarta.persistence.EntityManager
+
+/**
+ * Plain lazy-loading traversal: no `@EntityGraph`, no `JOIN FETCH` — every association access
+ * below is a separate (batched, thanks to the blanket `@BatchSize`) lazy load. This is the
+ * "nobody configured anything" arm.
+ */
+object NaiveOrmArm {
+
+  def run(em: EntityManager, shape: Shape, rootCode: String): List[String] = {
+    val root = em.find(classOf[CountryRegionEntity], rootCode)
+    if (root == null) Nil
+    else descend(root.stateProvinces.asScala.toList, JoinChain.hopsFrom(1, shape.depth), shape)
+  }
+
+  private object JoinChain {
+    // Local alias avoiding a name clash with benchmarksSql's JoinChain while reading similarly;
+    // `hopsFrom` just slices the shared hop list the same way `JoinChain.hops.take(depth)` does,
+    // starting after the root's own first hop (stateProvinces) which `run` already consumed.
+    def hopsFrom(start: Int, depth: Int): List[String] =
+      grackle.benchmarks.sql.JoinChain.hops.slice(start, depth)
+  }
+
+  private def touchWide(hop: String, entity: AnyRef, shape: Shape): Unit =
+    if (shape.wideFields) {
+      val _ = entity match {
+        case p: PersonEntity => (p.firstName, p.lastName)
+        case c: CustomerEntity => c.territoryId
+        case s: SalesOrderHeaderEntity => s.totalDue
+        case d: SalesOrderDetailEntity => (d.orderQty, d.unitPrice)
+        case _ => ()
+      }
+    }
+
+  private def descend(stateProvinces: List[StateProvinceEntity], remainingHops: List[String], shape: Shape): List[String] = {
+    def leafNames(entity: AnyRef): List[String] = entity match {
+      case c: ProductCategoryEntity => List(c.name)
+      case _ => Nil
+    }
+
+    def walk(entity: AnyRef, hops: List[String]): List[String] =
+      hops match {
+        case Nil => leafNames(entity)
+        case hop :: rest =>
+          // `businessEntityAddress.businessEntityId` isn't always a Person: AdventureWorks'
+          // shared BusinessEntity id space also covers Store/Vendor rows (confirmed live: 816 of
+          // 19614 businessentityaddress rows have no matching person row). Grackle's own schema
+          // models this hop as nullable (`person: Person`, a LEFT JOIN); the JPA mapping instead
+          // declares it `optional = false`, so Hibernate throws EntityNotFoundException instead
+          // of quietly returning null when it dereferences one of those dangling proxies. Treat
+          // that exception as "no match" here so the naive arm's I/O shape (which rows it reaches)
+          // stays aligned with the SQL arm's LEFT JOIN semantics rather than crashing outright.
+          try {
+            touchWide(hop, entity, shape)
+            entity match {
+              case s: StateProvinceEntity if hop == "addresses" =>
+                s.addresses.asScala.toList.flatMap(walk(_, rest))
+              case a: AddressEntity if hop == "businessEntityAddresses" =>
+                a.businessEntityAddresses.asScala.toList.flatMap(walk(_, rest))
+              case b: BusinessEntityAddressEntity if hop == "person" =>
+                Option(b.person).toList.flatMap(walk(_, rest))
+              case p: PersonEntity if hop == "customers" =>
+                p.customers.asScala.toList.flatMap(walk(_, rest))
+              case c: CustomerEntity if hop == "salesOrders" =>
+                c.salesOrders.asScala.toList.flatMap(walk(_, rest))
+              case s: SalesOrderHeaderEntity if hop == "lineItems" =>
+                s.lineItems.asScala.toList.flatMap(walk(_, rest))
+              case d: SalesOrderDetailEntity if hop == "product" =>
+                walk(d.product, rest)
+              case p: ProductEntity if hop == "subcategory" =>
+                Option(p.subcategory).toList.flatMap(walk(_, rest))
+              case s: ProductSubcategoryEntity if hop == "category" =>
+                walk(s.category, rest)
+              case _ => Nil
+            }
+          } catch {
+            case _: jakarta.persistence.EntityNotFoundException => Nil
+          }
+      }
+
+    stateProvinces.flatMap(sp => walk(sp, remainingHops))
+  }
+}
