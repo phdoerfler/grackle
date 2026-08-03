@@ -40,7 +40,13 @@ object NaiveOrmArm {
       grackle.benchmarks.sql.JoinChain.hops.slice(start, depth)
   }
 
-  private def touchWide(hop: String, entity: AnyRef, shape: Shape): Unit =
+  // Called unconditionally for every entity `walk` visits, whether or not it's the terminal
+  // (leaf-depth) entity: a hop's wide fields are still "selected at that hop" even when nothing
+  // is nested underneath it (mirrors a GraphQL query's outermost selected field still carrying
+  // its own leaf-field selection). Each entity is visited by exactly one `walk` call, so calling
+  // this at the top of `walk` reads every hop's wide fields exactly once — no double-counting,
+  // and no gap at the terminal hop.
+  private def touchWide(entity: AnyRef, shape: Shape): Unit =
     if (shape.wideFields) {
       val _ = entity match {
         case p: PersonEntity => (p.firstName, p.lastName)
@@ -51,51 +57,58 @@ object NaiveOrmArm {
       }
     }
 
-  private def descend(stateProvinces: List[StateProvinceEntity], remainingHops: List[String], shape: Shape): List[String] = {
+  private def descend(
+      stateProvinces: List[StateProvinceEntity],
+      remainingHops: List[String],
+      shape: Shape): List[String] = {
     def leafNames(entity: AnyRef): List[String] = entity match {
       case c: ProductCategoryEntity => List(c.name)
       case _ => Nil
     }
 
-    def walk(entity: AnyRef, hops: List[String]): List[String] =
+    def walk(entity: AnyRef, hops: List[String]): List[String] = {
+      touchWide(entity, shape)
       hops match {
         case Nil => leafNames(entity)
         case hop :: rest =>
-          // `businessEntityAddress.businessEntityId` isn't always a Person: AdventureWorks'
-          // shared BusinessEntity id space also covers Store/Vendor rows (confirmed live: 816 of
-          // 19614 businessentityaddress rows have no matching person row). Grackle's own schema
-          // models this hop as nullable (`person: Person`, a LEFT JOIN); the JPA mapping instead
-          // declares it `optional = false`, so Hibernate throws EntityNotFoundException instead
-          // of quietly returning null when it dereferences one of those dangling proxies. Treat
-          // that exception as "no match" here so the naive arm's I/O shape (which rows it reaches)
-          // stays aligned with the SQL arm's LEFT JOIN semantics rather than crashing outright.
-          try {
-            touchWide(hop, entity, shape)
-            entity match {
-              case s: StateProvinceEntity if hop == "addresses" =>
-                s.addresses.asScala.toList.flatMap(walk(_, rest))
-              case a: AddressEntity if hop == "businessEntityAddresses" =>
-                a.businessEntityAddresses.asScala.toList.flatMap(walk(_, rest))
-              case b: BusinessEntityAddressEntity if hop == "person" =>
-                Option(b.person).toList.flatMap(walk(_, rest))
-              case p: PersonEntity if hop == "customers" =>
-                p.customers.asScala.toList.flatMap(walk(_, rest))
-              case c: CustomerEntity if hop == "salesOrders" =>
-                c.salesOrders.asScala.toList.flatMap(walk(_, rest))
-              case s: SalesOrderHeaderEntity if hop == "lineItems" =>
-                s.lineItems.asScala.toList.flatMap(walk(_, rest))
-              case d: SalesOrderDetailEntity if hop == "product" =>
-                walk(d.product, rest)
-              case p: ProductEntity if hop == "subcategory" =>
-                Option(p.subcategory).toList.flatMap(walk(_, rest))
-              case s: ProductSubcategoryEntity if hop == "category" =>
-                walk(s.category, rest)
-              case _ => Nil
-            }
-          } catch {
-            case _: jakarta.persistence.EntityNotFoundException => Nil
+          entity match {
+            case s: StateProvinceEntity if hop == "addresses" =>
+              s.addresses.asScala.toList.flatMap(walk(_, rest))
+            case a: AddressEntity if hop == "businessEntityAddresses" =>
+              a.businessEntityAddresses.asScala.toList.flatMap(walk(_, rest))
+            case b: BusinessEntityAddressEntity if hop == "person" =>
+              // `businessEntityAddress.businessEntityId` isn't always a Person: AdventureWorks'
+              // shared BusinessEntity id space also covers Store/Vendor rows (confirmed live: 816
+              // of 19614 businessentityaddress rows have no matching person row) — legitimate
+              // data, not corruption. Grackle's own schema already models this hop as nullable
+              // (`person: Person`, a LEFT JOIN), and the entity mapping now declares
+              // `optional = true` to match. That flag alone doesn't stop Hibernate's proxy from
+              // throwing EntityNotFoundException on first dereference of a dangling FK, though
+              // (it only affects DDL/fetch planning, not this check), so this hop's dereference —
+              // and only this one — is wrapped to treat that specific exception as "no match",
+              // mirroring the LEFT JOIN semantics the schema already assumes. `walk`'s first
+              // action on the resolved person entity is always `touchWide`, so if the proxy is
+              // dangling this throws immediately, before any deeper hops are visited — this catch
+              // can't mask an unrelated data-integrity bug further down the chain (e.g. in the
+              // product/category hops).
+              try Option(b.person).toList.flatMap(walk(_, rest))
+              catch { case _: jakarta.persistence.EntityNotFoundException => Nil }
+            case p: PersonEntity if hop == "customers" =>
+              p.customers.asScala.toList.flatMap(walk(_, rest))
+            case c: CustomerEntity if hop == "salesOrders" =>
+              c.salesOrders.asScala.toList.flatMap(walk(_, rest))
+            case s: SalesOrderHeaderEntity if hop == "lineItems" =>
+              s.lineItems.asScala.toList.flatMap(walk(_, rest))
+            case d: SalesOrderDetailEntity if hop == "product" =>
+              walk(d.product, rest)
+            case p: ProductEntity if hop == "subcategory" =>
+              Option(p.subcategory).toList.flatMap(walk(_, rest))
+            case s: ProductSubcategoryEntity if hop == "category" =>
+              walk(s.category, rest)
+            case _ => Nil
           }
       }
+    }
 
     stateProvinces.flatMap(sp => walk(sp, remainingHops))
   }
