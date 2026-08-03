@@ -12,6 +12,8 @@ val circeVersion = "0.14.16"
 val disciplineMunitVersion = "2.0.0"
 val doobieVersion = "1.0.0-RC13"
 val fs2Version = "3.13.0"
+val hibernateVersion = "6.6.18.Final"
+val jakartaPersistenceApiVersion = "3.1.0"
 val http4sVersion = "0.23.36"
 val kindProjectorVersion = "0.13.4"
 val literallyVersion = "1.2.0"
@@ -70,6 +72,11 @@ ThisBuild / githubWorkflowBuild ~= { steps =>
 ThisBuild / githubWorkflowBuild += WorkflowStep.Sbt(
   commands = List("benchmarksSql/headerCheckAll", "benchmarksSql/scalafmtCheckAll"),
   name = Some("Check benchmarks-sql headers and formatting"),
+  cond = Some("matrix.project == 'rootJVM'")
+)
+ThisBuild / githubWorkflowBuild += WorkflowStep.Sbt(
+  commands = List("benchmarksOrm/headerCheckAll", "benchmarksOrm/scalafmtCheckAll"),
+  name = Some("Check benchmarks-orm headers and formatting"),
   cond = Some("matrix.project == 'rootJVM'")
 )
 ThisBuild / githubWorkflowJavaVersions := Seq(JavaSpec.temurin("11"))
@@ -459,6 +466,34 @@ lazy val benchmarksSql = project
       "org.http4s" %% "http4s-ember-server" % http4sVersion,
       "org.http4s" %% "http4s-circe" % http4sVersion,
       "org.http4s" %% "http4s-dsl" % http4sVersion
+    ),
+    Test / fork := true,
+    Test / parallelExecution := false,
+    Test / testOptions += Tests.Setup(_ =>
+      runDocker(
+        "docker compose --profile benchmarks up -d --wait --quiet-pull benchmark-postgres"
+      )),
+    Jmh / run :=
+      Def.inputTask((Jmh / run).evaluated).dependsOn(ThisBuild / benchPgUp).evaluated
+  )
+
+// Deliberately NOT included in `modules` / the root aggregate, for the same reason as
+// `benchmarksSql` immediately above: its tests require the seeded benchmark-postgres
+// database, which CI does not start. Header/format checks covered by a dedicated
+// githubWorkflowBuild step alongside benchmarksSql's (see below).
+lazy val benchmarksOrm = project
+  .in(file("benchmarks-orm"))
+  .dependsOn(benchmarksSql)
+  .enablePlugins(NoPublishPlugin, AutomateHeaderPlugin, JmhPlugin)
+  .settings(commonSettings)
+  .settings(
+    name := "grackle-benchmarks-orm",
+    coverageEnabled := false,
+    Compile / run / fork := true,
+    libraryDependencies ++= Seq(
+      "org.hibernate.orm" % "hibernate-core" % hibernateVersion,
+      "org.hibernate.orm" % "hibernate-hikaricp" % hibernateVersion,
+      "jakarta.persistence" % "jakarta.persistence-api" % jakartaPersistenceApiVersion
     ),
     Test / fork := true,
     Test / parallelExecution := false,
