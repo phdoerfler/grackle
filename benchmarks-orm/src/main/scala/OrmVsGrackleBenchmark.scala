@@ -35,6 +35,13 @@ import grackle.benchmarks.sql.{AdventureWorksMapping, BenchmarkDb, JoinChain}
  * Query-count instrumentation is deliberately NOT part of this class — see `OrmQueryCounts` and
  * this plan's deviation #3. This class measures wall-clock time only.
  *
+ * `shape.wideFields` (`deep-narrow` vs `deep-wide`) only varies the Grackle arm's query shape:
+ * `GrackleShapeQuery.nestWide` genuinely selects extra fields at every hop, but Hibernate
+ * always loads every mapped scalar column of a row regardless of which fields the naive/eager
+ * arms' traversal code happens to read afterward, so those two arms do IDENTICAL work — and
+ * should show near-identical timings — for `deep-narrow` and `deep-wide`. See
+ * `OrmQueryCounts`'s class doc for the same point on statement counts.
+ *
  * Requires `benchmark-postgres` running (`sbt benchPgUp`).
  *
  * sbt "benchmarksOrm/Jmh/run -f 1 -wi 3 -i 5 OrmVsGrackleBenchmark"
@@ -58,6 +65,10 @@ class OrmVsGrackleBenchmark {
   // issuing SQL after the first invocation, collapsing the naive arm's behavior toward the
   // eager arm's and inverting the comparison. Mirrors real per-request EntityManager scoping.
   private var entityManager: EntityManager = _
+  // Null until `setupTrial` assigns it; `teardownTrial` guards against that so a `setupTrial`
+  // failure (e.g. the seeded database missing something the Grackle arm depends on) surfaces its
+  // own exception instead of being masked by a NullPointerException from `teardownTrial`.
+  private var releaseTransactor: IO[Unit] = _
 
   @Setup(Level.Trial)
   def setupTrial(): Unit = {
@@ -65,15 +76,27 @@ class OrmVsGrackleBenchmark {
       .all
       .find(_.name == shapeName)
       .getOrElse(throw new IllegalArgumentException(s"unknown shape: $shapeName"))
-    grackleMapping = AdventureWorksMapping.mkMapping[IO](BenchmarkDb.transactor[IO])
+    // Pooled transactor, not `BenchmarkDb.transactor` (`Transactor.fromDriverManager`): the
+    // latter opens/closes a fresh Postgres connection — forking a backend process — on every
+    // transaction, which would put several ms of high-variance, non-Grackle work inside every
+    // timed sample. The ORM arms below already run against a pooled HikariCP
+    // `EntityManagerFactory` (`persistence.xml`'s `hibernate.hikari.maximumPoolSize=4`), so pool
+    // parity with Grackle's arm matters for this class's headline comparison. Mirrors
+    // `SqlJoinDepthBenchmark`/`RawVsGrackleBenchmark`'s `setup` in `benchmarksSql`.
+    val (transactor, release) = BenchmarkDb.transactorResource[IO].allocated.unsafeRunSync()
+    releaseTransactor = release
+    grackleMapping = AdventureWorksMapping.mkMapping[IO](transactor)
+    BenchmarkDb.prewarm[IO](transactor).unsafeRunSync()
     // No `hibernate.generate_statistics` override here: default is off, keeping this run
     // timing-only (see deviation #3 / OrmQueryCounts for the query-count harness).
     entityManagerFactory = OrmDb.emf()
   }
 
   @TearDown(Level.Trial)
-  def teardownTrial(): Unit =
+  def teardownTrial(): Unit = {
     if (entityManagerFactory != null) entityManagerFactory.close()
+    if (releaseTransactor != null) releaseTransactor.unsafeRunSync()
+  }
 
   @Setup(Level.Invocation)
   def setupInvocation(): Unit =
