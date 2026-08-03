@@ -15,4 +15,20 @@
 
 package grackle.benchmarks.orm
 
-object Placeholder
+import jakarta.persistence.{EntityManagerFactory, Persistence}
+
+object OrmDb {
+  val persistenceUnitName: String = "adventureworks"
+
+  def emf(): EntityManagerFactory =
+    Persistence.createEntityManagerFactory(persistenceUnitName)
+
+  /**
+   * Same connection target as `benchmarksSql`'s `BenchmarkDb`, so both arms hit the identical
+   * seeded database.
+   */
+  def emf(extraProperties: Map[String, String]): EntityManagerFactory = {
+    import scala.jdk.CollectionConverters._
+    Persistence.createEntityManagerFactory(persistenceUnitName, extraProperties.asJava)
+  }
+}
