@@ -29,11 +29,29 @@ import grackle.doobie.DoobieMonitor
  * Counts SQL statements per arm, per shape. Runs OUTSIDE JMH deliberately, for the same reason
  * `benchmarksSql`'s `SqlQueryCounts` does: enabling Hibernate statistics (or a
  * stats-accumulating DoobieMonitor) does per-statement bookkeeping that would pollute a timed
- * JMH region. Counts are fully deterministic, so no warmup/repetition is needed here either.
+ * JMH region.
+ *
+ * The Grackle arm's count is fully deterministic (it always emits exactly one SQL statement per
+ * shape), so no warmup/repetition is needed for it. The two ORM arms are NOT fully
+ * deterministic: `OrmQueryCountsSuite` documents small run-to-run variance in their statement
+ * counts (hence its tolerance on the untuned-shape parity check). That variance traces to
+ * `java.util.HashSet` iteration order affecting `@BatchSize` IN-clause chunking — the entity
+ * classes don't override `equals`/`hashCode`, so their `Set`-typed association fields iterate
+ * in identity-hashcode order, which varies per JVM run. (HikariCP connection-pool warmup is not
+ * a contributing factor here: Hikari's own connection setup never goes through Hibernate's
+ * `getPrepareStatementCount`.)
  *
  * Uses `Statistics.getPrepareStatementCount()`, NOT `getQueryExecutionCount()` — the latter
  * only counts explicit JPQL/Criteria query executions, not the implicit SQL Hibernate issues
  * for lazy collection/entity loads, which is exactly the behavior under test.
+ *
+ * Expect `deep-narrow` and `deep-wide`'s naive/eager counts (and their timings in
+ * `OrmVsGrackleBenchmark`) to come out identical: Hibernate always selects every mapped scalar
+ * column of a row when it loads an entity, and `NaiveOrmArm.touchWide` only reads fields
+ * already materialized in memory, so `Shape.wideFields` never changes how much SQL the ORM arms
+ * issue — only which of Grackle's own selected columns change (`GrackleShapeQuery.nestWide`
+ * genuinely selects extra fields at every hop for `deep-wide`). Identical `naive`/`eager`
+ * numbers across those two shapes are therefore the CORRECT result, not a bug in this harness.
  *
  * sbt "benchmarksOrm/runMain grackle.benchmarks.orm.OrmQueryCounts"
  */

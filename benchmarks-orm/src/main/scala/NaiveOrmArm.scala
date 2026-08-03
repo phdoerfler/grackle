@@ -98,7 +98,18 @@ object NaiveOrmArm {
               Option(p.subcategory).toList.flatMap(walk(_, rest))
             case s: ProductSubcategoryEntity if hop == "category" =>
               walk(s.category, rest)
-            case _ => Nil
+            // Reachable only if `JoinChain.hops`, an entity's `@OneToMany(mappedBy=...)` string,
+            // or `EagerOrmArm.hopEntityClass`'s keys ever drift out of sync with each other — the
+            // `hops == Nil` case (no traversal left to do) is already handled above by
+            // `case Nil => leafNames(entity)`, so any `(entity, hop)` pair reaching here is a real
+            // bug, not a shape that legitimately stops early. Fail loudly rather than silently
+            // truncating the walk, matching every other string-keyed lookup in this codebase
+            // (`EagerOrmArm.hopEntityClass(hop)`, `graph.addSubgraph`, `GrackleShapeQuery`'s
+            // `wideLeafFields(field)`), all of which throw on an unmatched key instead of
+            // returning an empty result that would misleadingly read as "this arm did less work."
+            case _ =>
+              throw new IllegalStateException(
+                s"no traversal defined for hop '$hop' from entity ${entity.getClass.getSimpleName}")
           }
       }
     }
