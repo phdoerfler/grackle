@@ -81,18 +81,11 @@ object NaiveOrmArm {
               // shared BusinessEntity id space also covers Store/Vendor rows (confirmed live: 816
               // of 19614 businessentityaddress rows have no matching person row) — legitimate
               // data, not corruption. Grackle's own schema already models this hop as nullable
-              // (`person: Person`, a LEFT JOIN), and the entity mapping now declares
-              // `optional = true` to match. That flag alone doesn't stop Hibernate's proxy from
-              // throwing EntityNotFoundException on first dereference of a dangling FK, though
-              // (it only affects DDL/fetch planning, not this check), so this hop's dereference —
-              // and only this one — is wrapped to treat that specific exception as "no match",
-              // mirroring the LEFT JOIN semantics the schema already assumes. `walk`'s first
-              // action on the resolved person entity is always `touchWide`, so if the proxy is
-              // dangling this throws immediately, before any deeper hops are visited — this catch
-              // can't mask an unrelated data-integrity bug further down the chain (e.g. in the
-              // product/category hops).
-              try Option(b.person).toList.flatMap(walk(_, rest))
-              catch { case _: jakarta.persistence.EntityNotFoundException => Nil }
+              // (`person: Person`, a LEFT JOIN). The entity mapping's `@NotFound(IGNORE)` (see
+              // `AdventureWorksEntities.scala`) makes Hibernate resolve a dangling FK straight to
+              // `null` instead of throwing, so a plain `Option(...)` is sufficient here — no
+              // exception handling needed, mirroring the LEFT JOIN semantics the schema assumes.
+              Option(b.person).toList.flatMap(walk(_, rest))
             case p: PersonEntity if hop == "customers" =>
               p.customers.asScala.toList.flatMap(walk(_, rest))
             case c: CustomerEntity if hop == "salesOrders" =>
