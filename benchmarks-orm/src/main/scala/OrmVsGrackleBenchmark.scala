@@ -32,8 +32,8 @@ import grackle.benchmarks.sql.{AdventureWorksMapping, BenchmarkDb, JoinChain}
  * warmup/JIT/GC conditions — avoids the cross-run comparability problems the BigDecimal.equals
  * measurement work hit twice (see `topic/sql-benchmarks` history).
  *
- * Query-count instrumentation is deliberately NOT part of this class — see `OrmQueryCounts`
- * and this plan's deviation #3. This class measures wall-clock time only.
+ * Query-count instrumentation is deliberately NOT part of this class — see `OrmQueryCounts` and
+ * this plan's deviation #3. This class measures wall-clock time only.
  *
  * Requires `benchmark-postgres` running (`sbt benchPgUp`).
  *
@@ -61,8 +61,10 @@ class OrmVsGrackleBenchmark {
 
   @Setup(Level.Trial)
   def setupTrial(): Unit = {
-    shape = OrmQueryShapes.all.find(_.name == shapeName).getOrElse(
-      throw new IllegalArgumentException(s"unknown shape: $shapeName"))
+    shape = OrmQueryShapes
+      .all
+      .find(_.name == shapeName)
+      .getOrElse(throw new IllegalArgumentException(s"unknown shape: $shapeName"))
     grackleMapping = AdventureWorksMapping.mkMapping[IO](BenchmarkDb.transactor[IO])
     // No `hibernate.generate_statistics` override here: default is off, keeping this run
     // timing-only (see deviation #3 / OrmQueryCounts for the query-count harness).
