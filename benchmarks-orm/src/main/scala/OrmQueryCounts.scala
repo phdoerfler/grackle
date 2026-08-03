@@ -20,7 +20,6 @@ import java.nio.file.{Files, Paths}
 import cats.effect.{IO, IOApp}
 import cats.implicits._
 import io.circe.Json
-import org.hibernate.Session
 import org.hibernate.stat.Statistics
 
 import grackle.benchmarks.sql.{AdventureWorksMapping, BenchmarkDb, JoinChain}
@@ -28,13 +27,13 @@ import grackle.doobie.DoobieMonitor
 
 /**
  * Counts SQL statements per arm, per shape. Runs OUTSIDE JMH deliberately, for the same reason
- * `benchmarksSql`'s `SqlQueryCounts` does: enabling Hibernate statistics (or a stats-accumulating
- * DoobieMonitor) does per-statement bookkeeping that would pollute a timed JMH region. Counts are
- * fully deterministic, so no warmup/repetition is needed here either.
+ * `benchmarksSql`'s `SqlQueryCounts` does: enabling Hibernate statistics (or a
+ * stats-accumulating DoobieMonitor) does per-statement bookkeeping that would pollute a timed
+ * JMH region. Counts are fully deterministic, so no warmup/repetition is needed here either.
  *
- * Uses `Statistics.getPrepareStatementCount()`, NOT `getQueryExecutionCount()` — the latter only
- * counts explicit JPQL/Criteria query executions, not the implicit SQL Hibernate issues for lazy
- * collection/entity loads, which is exactly the behavior under test.
+ * Uses `Statistics.getPrepareStatementCount()`, NOT `getQueryExecutionCount()` — the latter
+ * only counts explicit JPQL/Criteria query executions, not the implicit SQL Hibernate issues
+ * for lazy collection/entity loads, which is exactly the behavior under test.
  *
  * sbt "benchmarksOrm/runMain grackle.benchmarks.orm.OrmQueryCounts"
  */
@@ -47,7 +46,8 @@ object OrmQueryCounts extends IOApp.Simple {
   private def statisticsOf(factory: jakarta.persistence.EntityManagerFactory): Statistics =
     factory.unwrap(classOf[org.hibernate.SessionFactory]).getStatistics
 
-  def countOrm(runArm: (jakarta.persistence.EntityManager, Shape, String) => List[String]): IO[List[ArmCount]] =
+  def countOrm(runArm: (jakarta.persistence.EntityManager, Shape, String) => List[String])
+      : IO[List[ArmCount]] =
     IO.blocking {
       val factory = OrmDb.emf(Map("hibernate.generate_statistics" -> "true"))
       try {
@@ -56,17 +56,19 @@ object OrmQueryCounts extends IOApp.Simple {
         OrmQueryShapes.all.map { shape =>
           stats.clear()
           val em = factory.createEntityManager()
-          val names =
-            try runArm(em, shape, JoinChain.defaultRootCode)
-            finally em.close()
-          // NOT `names.nonEmpty`: `NaiveOrmArm`/`EagerOrmArm`'s shared `walk`/`leafNames` only
-          // recognizes `ProductCategoryEntity` as a leaf, so `names` is structurally empty for
-          // any shape whose depth stops short of the full 10-hop chain (`shallowNarrow` depth 3,
-          // `untuned` depth 7 both never reach "category") — that's true for every arm, not a
-          // failure mode. What this guard actually needs to catch is a shape that did no SQL
-          // work at all, which the statement count (the metric under test) answers directly.
+          try runArm(em, shape, JoinChain.defaultRootCode)
+          finally em.close()
+          // NOT `names.nonEmpty` (the walk's returned leaf-name list): `NaiveOrmArm`/
+          // `EagerOrmArm`'s shared `walk`/`leafNames` only recognizes `ProductCategoryEntity` as
+          // a leaf, so that list is structurally empty for any shape whose depth stops short of
+          // the full 10-hop chain (`shallowNarrow` depth 3, `untuned` depth 7 both never reach
+          // "category") — that's true for every arm, not a failure mode. What this guard
+          // actually needs to catch is a shape that did no SQL work at all, which the statement
+          // count (the metric under test) answers directly.
           val statements = stats.getPrepareStatementCount.toInt
-          require(statements > 0, s"shape ${shape.name} issued no SQL statements — a zero-effort shape looks falsely cheap")
+          require(
+            statements > 0,
+            s"shape ${shape.name} issued no SQL statements — a zero-effort shape looks falsely cheap")
           ArmCount(shape.name, statements)
         }
       } finally factory.close()
@@ -78,7 +80,9 @@ object OrmQueryCounts extends IOApp.Simple {
       OrmQueryShapes.all.traverse { shape =>
         for {
           result <- mapping.compileAndRun(GrackleShapeQuery.queryFor(shape))
-          _ = require(!result.hcursor.downField("errors").succeeded, s"GraphQL errors for shape ${shape.name}: $result")
+          _ = require(
+            !result.hcursor.downField("errors").succeeded,
+            s"GraphQL errors for shape ${shape.name}: $result")
           stats <- monitor.take
         } yield ArmCount(shape.name, stats.size)
       }
@@ -88,7 +92,8 @@ object OrmQueryCounts extends IOApp.Simple {
     Json.obj(
       "arm" -> Json.fromString(label),
       "counts" -> Json.arr(counts.map { c =>
-        Json.obj("shape" -> Json.fromString(c.shape), "statements" -> Json.fromInt(c.statements))
+        Json
+          .obj("shape" -> Json.fromString(c.shape), "statements" -> Json.fromInt(c.statements))
       }: _*)
     )
 
