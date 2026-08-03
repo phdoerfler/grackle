@@ -32,15 +32,18 @@ final case class Shape(name: String, depth: Int, wideFields: Boolean, tuned: Boo
 
 object OrmQueryShapes {
   // A few hops, one field per hop.
-  val shallowNarrow: Shape = Shape("shallow-narrow", depth = 3, wideFields = false, tuned = true)
+  val shallowNarrow: Shape =
+    Shape("shallow-narrow", depth = 3, wideFields = false, tuned = true)
 
   // Full depth, one field per hop — directly comparable to benchmarksSql's existing depth-10
   // numbers.
-  val deepNarrow: Shape = Shape("deep-narrow", depth = JoinChain.maxDepth, wideFields = false, tuned = true)
+  val deepNarrow: Shape =
+    Shape("deep-narrow", depth = JoinChain.maxDepth, wideFields = false, tuned = true)
 
   // Full depth, richer field selection per hop — mirrors the query shape that originally
   // surfaced the BigDecimal.equals bug via profiling.
-  val deepWide: Shape = Shape("deep-wide", depth = JoinChain.maxDepth, wideFields = true, tuned = true)
+  val deepWide: Shape =
+    Shape("deep-wide", depth = JoinChain.maxDepth, wideFields = true, tuned = true)
 
   // Moderate depth (distinct from both 3 and 10), deliberately NOT tuned: the eager arm never
   // builds an entity graph for this shape, so it falls through to the blanket @BatchSize
