@@ -33,8 +33,21 @@ class OrmQueryCountsSuite extends CatsEffectSuite {
         assertEquals(c.statements, 1, s"grackle shape ${c.shape} was not 1 query"))
 
       OrmQueryShapes.all.foreach { shape =>
+        val grackleCount = grackle.find(_.shape == shape.name).get.statements
         val naiveCount = naive.find(_.shape == shape.name).get.statements
         val eagerCount = eager.find(_.shape == shape.name).get.statements
+
+        // The headline "Grackle 1, ORM many" claim this whole harness exists to demonstrate:
+        // real observed ratios are roughly 260:1 and 1800:1 (naive:grackle) across shapes, so a
+        // 10x floor is a safe margin, not a flaky threshold, while still ruling out a naive count
+        // that's merely "a little more than 1" (e.g. 2), which the test's name promised but
+        // nothing previously asserted.
+        assert(
+          naiveCount > 10 * grackleCount,
+          s"shape ${shape.name}: expected naive ($naiveCount) to badly out-query grackle " +
+            s"($grackleCount), i.e. naive > 10x grackle"
+        )
+
         if (shape.tuned) {
           assert(
             eagerCount < naiveCount,
@@ -46,9 +59,10 @@ class OrmQueryCountsSuite extends CatsEffectSuite {
           // `EntityManagerFactory`/connection-pool instances. Live-verified across 5+ repeated
           // runs: the two counts still differ by a handful of statements run to run (observed
           // range roughly -8 to +3, out of a ~260 baseline) — not a behavioral difference, but
-          // ordinary execution noise (HikariCP connection-pool warmup statement counts,
-          // `@BatchSize` IN-clause batch boundaries that depend on `java.util.HashSet`
-          // iteration order across separate JVM object layouts). An exact `assertEquals` would
+          // ordinary execution noise (`@BatchSize` IN-clause batch boundaries that depend on
+          // `java.util.HashSet` iteration order across separate JVM object layouts — the entity
+          // classes don't override `equals`/`hashCode`, so iteration order follows identity
+          // hashcodes, which vary per JVM run). An exact `assertEquals` would
           // be flaky by construction here, so this allows a tolerance well above the observed
           // noise band while still being a real regression guard: if eager's untuned behavior
           // ever structurally diverges from naive's (e.g. the kind of bug this suite exists to
