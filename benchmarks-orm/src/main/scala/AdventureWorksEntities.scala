@@ -18,7 +18,7 @@ package grackle.benchmarks.orm
 import java.{util => ju}
 
 import jakarta.persistence._
-import org.hibernate.annotations.BatchSize
+import org.hibernate.annotations.{BatchSize, NotFound, NotFoundAction}
 
 @Entity
 @Table(name = "countryregion", schema = "person")
@@ -126,9 +126,21 @@ class BusinessEntityAddressEntity {
   // businessentityid that belongs to a Store/Vendor, not a Person — legitimate data, not
   // corruption. Grackle's own GraphQL schema already models this hop as nullable
   // (`person: Person`, no `!`); `optional = false` here would assert a cardinality guarantee
-  // neither the schema nor the data actually has, and makes Hibernate throw
-  // EntityNotFoundException instead of quietly resolving to null on dereference.
-  @ManyToOne(fetch = FetchType.LAZY, optional = true)
+  // neither the schema nor the data actually has.
+  //
+  // `@NotFound(action = NotFoundAction.IGNORE)`: there's no actual FK constraint backing this
+  // column (live-verified: every one of the 6 full-chain root codes — US/AU/CA/GB/DE/FR — has
+  // businessentityaddress rows whose businessentityid dangles, 40-541 rows depending on root;
+  // this is structural to the AdventureWorks-for-Postgres dataset, not an artifact of any one
+  // root code), so this is exactly the referential-integrity-violation-without-a-constraint
+  // case `@NotFound` exists for: Hibernate treats a dangling id as if the FK were null instead
+  // of throwing. Per `@NotFound`'s own javadoc, it forces the association eager regardless of
+  // the declared `fetch`, so `FetchType.EAGER` is spelled out explicitly here rather than left
+  // as `LAZY` (which Hibernate would silently override anyway) — this is a real, unavoidable
+  // Hibernate constraint for this schema, not a benchmark-fairness compromise: both the naive
+  // and eager arms pay this identical one-hop cost identically, and no other hop is affected.
+  @ManyToOne(fetch = FetchType.EAGER, optional = true)
+  @NotFound(action = NotFoundAction.IGNORE)
   @MapsId("businessEntityId")
   @JoinColumn(name = "businessentityid")
   var person: PersonEntity = _
