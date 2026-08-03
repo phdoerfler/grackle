@@ -16,6 +16,7 @@
 package grackle.benchmarks.orm
 
 import java.{util => ju}
+
 import jakarta.persistence._
 import org.hibernate.annotations.BatchSize
 
@@ -208,6 +209,7 @@ class SalesOrderDetailEntity {
 
 @Entity
 @Table(name = "product", schema = "production")
+@BatchSize(size = 32)
 class ProductEntity {
   @Id
   @Column(name = "productid")
@@ -223,6 +225,7 @@ class ProductEntity {
 
 @Entity
 @Table(name = "productsubcategory", schema = "production")
+@BatchSize(size = 32)
 class ProductSubcategoryEntity {
   @Id
   @Column(name = "productsubcategoryid")
@@ -238,6 +241,7 @@ class ProductSubcategoryEntity {
 
 @Entity
 @Table(name = "productcategory", schema = "production")
+@BatchSize(size = 32)
 class ProductCategoryEntity {
   @Id
   @Column(name = "productcategoryid")
