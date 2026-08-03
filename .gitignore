@@ -79,3 +79,9 @@ query*.sql
 # JMH profiler output directories (async-profiler/JFR), written into the
 # module base dir when -prof is used without an explicit dir= option.
 /benchmarks-sql/grackle.benchmarks.sql.*-SampleTime-depth-*/
+
+# Benchmarks: generated output, not source. (benchmarks-orm)
+# See benchmarks-sql comment block above for explanation of paths.
+/benchmarks-orm/results.json
+/benchmarks-orm/query-counts.json
+/benchmarks-orm/grackle.benchmarks.orm.*-SampleTime-*/
