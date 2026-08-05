@@ -34,13 +34,13 @@ import grackle.benchmarks.sql.{AdventureWorksMapping, BenchmarkDb, JoinChain}
  * which was chosen specifically to mimic Grackle's own nullable LEFT JOIN semantics for that
  * relation (a `businessEntityAddress` row whose `businessEntityId` belongs to a Store/Vendor,
  * not a Person, resolves to `null` on both sides rather than being skipped or erroring). That
- * equivalence claim was previously only asserted in a code comment; this test actually exercises
- * it end to end.
+ * equivalence claim was previously only asserted in a code comment; this test actually
+ * exercises it end to end.
  *
  * Uses the `deep-narrow` shape (full depth 10, one field per hop): the shape most directly
- * comparable across arms, since neither `wideFields` nor `tuned` changes which rows are reached,
- * only which columns are selected or how many statements are issued (see `OrmQueryCounts` and
- * `OrmVsGrackleBenchmark`'s class docs on that distinction).
+ * comparable across arms, since neither `wideFields` nor `tuned` changes which rows are
+ * reached, only which columns are selected or how many statements are issued (see
+ * `OrmQueryCounts` and `OrmVsGrackleBenchmark`'s class docs on that distinction).
  */
 class GrackleVsOrmParitySuite extends CatsEffectSuite {
   val mapping = AdventureWorksMapping.mkMapping[IO](BenchmarkDb.transactor[IO])
@@ -66,7 +66,9 @@ class GrackleVsOrmParitySuite extends CatsEffectSuite {
       "category" -> false
     )
 
-  /** Every JSON node reached by following every branch of `hops` from `current`. */
+  /**
+   * Every JSON node reached by following every branch of `hops` from `current`.
+   */
   def descendAll(current: Json, hops: List[(String, Boolean)]): List[Json] =
     hops match {
       case Nil => List(current)
@@ -92,7 +94,9 @@ class GrackleVsOrmParitySuite extends CatsEffectSuite {
       finally em.close()
 
     mapping.compileAndRun(GrackleShapeQuery.queryFor(shape, rootCode)).map { result =>
-      assert(!result.hcursor.downField("errors").succeeded, s"unexpected GraphQL errors: $result")
+      assert(
+        !result.hcursor.downField("errors").succeeded,
+        s"unexpected GraphQL errors: $result")
 
       val countryRegions =
         result
