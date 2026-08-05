@@ -15,6 +15,7 @@
 
 package grackle.benchmarks.orm
 
+import io.circe.Json
 import jakarta.persistence.{EntityGraph, EntityManager}
 
 /**
@@ -69,7 +70,7 @@ object EagerOrmArm {
     graph
   }
 
-  def run(em: EntityManager, shape: Shape, rootCode: String): List[String] = {
+  def run(em: EntityManager, shape: Shape, rootCode: String): Json = {
     val root =
       if (!shape.tuned) em.find(classOf[CountryRegionEntity], rootCode)
       else {
@@ -108,7 +109,7 @@ object EagerOrmArm {
         // directly, with the entity graph fully applied, for every tuned shape and root code.
         em.find(classOf[CountryRegionEntity], rootCode, hints)
       }
-    if (root == null) Nil
+    if (root == null) Json.obj("data" -> Json.obj("countryRegions" -> Json.arr()))
     else
       NaiveOrmArm.run(
         em,

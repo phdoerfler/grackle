@@ -64,7 +64,7 @@ object OrmQueryCounts extends IOApp.Simple {
   private def statisticsOf(factory: jakarta.persistence.EntityManagerFactory): Statistics =
     factory.unwrap(classOf[org.hibernate.SessionFactory]).getStatistics
 
-  def countOrm(runArm: (jakarta.persistence.EntityManager, Shape, String) => List[String])
+  def countOrm(runArm: (jakarta.persistence.EntityManager, Shape, String) => io.circe.Json)
       : IO[List[ArmCount]] =
     IO.blocking {
       val factory = OrmDb.emf(Map("hibernate.generate_statistics" -> "true"))

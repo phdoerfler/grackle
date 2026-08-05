@@ -28,7 +28,8 @@ class NaiveOrmArmSuite extends FunSuite {
     test(s"naive arm reaches a known category name for shape ${shape.name}") {
       val em = factory.createEntityManager()
       try {
-        val names = NaiveOrmArm.run(em, shape, grackle.benchmarks.sql.JoinChain.defaultRootCode)
+        val doc = NaiveOrmArm.run(em, shape, grackle.benchmarks.sql.JoinChain.defaultRootCode)
+        val names = JsonCanonical.categoryNames(doc)
         if (shape.depth == grackle.benchmarks.sql.JoinChain.maxDepth) {
           assert(names.exists(knownCategoryNames), s"no known category name in $names")
         }

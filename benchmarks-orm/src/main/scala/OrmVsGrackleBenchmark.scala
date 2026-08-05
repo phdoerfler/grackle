@@ -87,7 +87,9 @@ class OrmVsGrackleBenchmark {
    * / 271 / 272 / 260 statements) and 264.3 for the eager arm on `untuned` (261 statements,
    * i.e. no better than naive — the whole point of that shape, in one number). A model built
    * purely from statement counts predicts wall-clock behavior across three orders of magnitude.
-   * Full tables and caveats in `benchmarks-sql/PHASE3-RESULTS.md`.
+   * Full tables and caveats in `benchmarks-sql/PHASE3-RESULTS.md`. (Those figures predate the
+   * ORM arms assembling a response document; the slopes should be unaffected, the zero-latency
+   * baselines are not.)
    */
   @Param(Array("0", "5", "20", "50"))
   var latencyMs: Int = _
@@ -158,14 +160,14 @@ class OrmVsGrackleBenchmark {
 
   @Benchmark
   def naiveArm(blackhole: Blackhole): Unit = {
-    val names = inTransaction(NaiveOrmArm.run(entityManager, shape, JoinChain.defaultRootCode))
-    blackhole.consume(names)
+    val doc = inTransaction(NaiveOrmArm.run(entityManager, shape, JoinChain.defaultRootCode))
+    blackhole.consume(doc)
   }
 
   @Benchmark
   def eagerArm(blackhole: Blackhole): Unit = {
-    val names = inTransaction(EagerOrmArm.run(entityManager, shape, JoinChain.defaultRootCode))
-    blackhole.consume(names)
+    val doc = inTransaction(EagerOrmArm.run(entityManager, shape, JoinChain.defaultRootCode))
+    blackhole.consume(doc)
   }
 
   /**
