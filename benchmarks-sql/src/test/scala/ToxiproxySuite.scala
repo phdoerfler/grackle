@@ -69,6 +69,13 @@ class ToxiproxySuite extends FunSuite {
       (System.nanoTime() - started) / 1000000L
     }
 
+    // Pay the JVM's one-time JDBC/driver warm-up cost outside either measurement. In a cold
+    // forked JVM the first `select 1` of the whole run takes seconds — SCRAM-SHA-256 auth
+    // pulling from a cold SecureRandom — which would otherwise land entirely in `undelayed`
+    // and swamp the toxic this test exists to detect, failing the test for a reason that has
+    // nothing to do with the proxy.
+    timeSelect1()
+
     Toxiproxy.clearToxics()
     val undelayed = timeSelect1()
 
