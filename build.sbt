@@ -139,9 +139,10 @@ ThisBuild / oracleStop := runDocker("docker compose stop oracle")
 ThisBuild / mssqlUp := runDocker("docker compose up -d --wait --quiet-pull mssql")
 ThisBuild / mssqlStop := runDocker("docker compose stop mssql")
 ThisBuild / benchPgUp :=
-  runDocker("docker compose --profile benchmarks up -d --wait --quiet-pull benchmark-postgres")
+  runDocker(
+    "docker compose --profile benchmarks up -d --wait --quiet-pull benchmark-postgres toxiproxy")
 ThisBuild / benchPgStop := runDocker(
-  "docker compose --profile benchmarks stop benchmark-postgres")
+  "docker compose --profile benchmarks stop benchmark-postgres toxiproxy")
 
 def runDocker(cmd: String): Unit = {
   require(cmd.! == 0, s"docker indicated an error")
@@ -471,7 +472,8 @@ lazy val benchmarksSql = project
     Test / parallelExecution := false,
     Test / testOptions += Tests.Setup(_ =>
       runDocker(
-        "docker compose --profile benchmarks up -d --wait --quiet-pull benchmark-postgres"
+        "docker compose --profile benchmarks up -d --wait --quiet-pull " +
+          "benchmark-postgres toxiproxy"
       )),
     Jmh / run :=
       Def.inputTask((Jmh / run).evaluated).dependsOn(ThisBuild / benchPgUp).evaluated
@@ -499,7 +501,8 @@ lazy val benchmarksOrm = project
     Test / parallelExecution := false,
     Test / testOptions += Tests.Setup(_ =>
       runDocker(
-        "docker compose --profile benchmarks up -d --wait --quiet-pull benchmark-postgres"
+        "docker compose --profile benchmarks up -d --wait --quiet-pull " +
+          "benchmark-postgres toxiproxy"
       )),
     Jmh / run :=
       Def.inputTask((Jmh / run).evaluated).dependsOn(ThisBuild / benchPgUp).evaluated

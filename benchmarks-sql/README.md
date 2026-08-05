@@ -6,7 +6,28 @@ walks deeper down a real 11-table join chain (AdventureWorks-for-Postgres: `Coun
 → SalesOrderDetail → Product → ProductSubcategory → ProductCategory`), against a
 dedicated Postgres instance seeded via Docker.
 
-Out of scope for this phase: network-latency simulation, chart publishing, CI wiring.
+Out of scope for this phase: chart publishing, CI wiring.
+
+## Topology
+
+The benchmark JVM does not talk to Postgres directly. A Toxiproxy container owns host
+port 5433 and forwards to `benchmark-postgres:5432` over the Docker network:
+
+    benchmark JVM  --(host :5433)-->  toxiproxy  --(docker network)-->  benchmark-postgres :5432
+                         admin API on host :8474
+
+`benchmark-postgres` no longer publishes a host port of its own, so there is no way to
+accidentally bypass the proxy and measure an un-delayed connection. Every JDBC URL in
+this repo is still `jdbc:postgresql://localhost:5433/benchmark` and needed no change.
+
+The proxy is created at container start from `testdata/benchmark-pg/toxiproxy.json`
+(mounted read-only), not via the admin API, so it is already present for consumers that
+never touch the API — the test suites, `AdventureWorksServer`, and the other JMH classes.
+It starts with no toxics, i.e. zero added latency, so anything that does not deliberately
+inject latency behaves exactly as it did before.
+
+`sbt benchPgUp` starts both services and waits for both to be healthy; `sbt benchPgStop`
+stops both.
 
 `benchmarksSql` is a standalone sbt project, not aggregated into the root build (see
 `build.sbt`): a plain `sbt test` / `sbt compile` at the repo root will not touch it,
