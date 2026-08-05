@@ -25,10 +25,10 @@ import io.circe.{parser, Json}
  * time between the benchmark JVM and `benchmark-postgres` (see this repo's README topology
  * section).
  *
- * Deliberately does NOT create the proxy: `testdata/benchmark-pg/toxiproxy.json` is mounted into
- * the container and creates it at boot, so the proxy is already present for the many consumers
- * of port 5433 that never touch this API (the test suites, `AdventureWorksServer`, the JMH
- * classes in `benchmarksSql`). This object only adds and removes toxics.
+ * Deliberately does NOT create the proxy: `testdata/benchmark-pg/toxiproxy.json` is mounted
+ * into the container and creates it at boot, so the proxy is already present for the many
+ * consumers of port 5433 that never touch this API (the test suites, `AdventureWorksServer`,
+ * the JMH classes in `benchmarksSql`). This object only adds and removes toxics.
  *
  * Every failure here throws. There is deliberately no fallback to an un-proxied or un-toxified
  * connection: silently benchmarking a connection that is not actually delayed would invalidate
@@ -36,7 +36,9 @@ import io.circe.{parser, Json}
  */
 object Toxiproxy {
 
-  /** Matches the `name` in `testdata/benchmark-pg/toxiproxy.json`. */
+  /**
+   * Matches the `name` in `testdata/benchmark-pg/toxiproxy.json`.
+   */
   val proxyName: String = "benchmark-postgres"
 
   private val upstreamToxicName = "latency_upstream"
@@ -50,11 +52,11 @@ object Toxiproxy {
     sys.props.getOrElse("grackle.benchmarks.toxiproxyUrl", "http://localhost:8474")
 
   final case class Toxic(
-    name: String,
-    toxicType: String,
-    stream: String,
-    latencyMs: Int,
-    jitterMs: Int
+      name: String,
+      toxicType: String,
+      stream: String,
+      latencyMs: Int,
+      jitterMs: Int
   )
 
   private val client: HttpClient = HttpClient.newHttpClient()
@@ -89,7 +91,9 @@ object Toxiproxy {
 
   private def toxicsPath: String = s"/proxies/$proxyName/toxics"
 
-  /** The toxics currently installed on the proxy, in the order the API reports them. */
+  /**
+   * The toxics currently installed on the proxy, in the order the API reports them.
+   */
   def listToxics(): List[Toxic] = {
     val body = send(request("GET", toxicsPath, None), Set(200))
     val json = parser
@@ -97,7 +101,8 @@ object Toxiproxy {
       .fold(
         failure =>
           throw new IllegalStateException(
-            s"Toxiproxy returned a body that is not JSON: $body", failure),
+            s"Toxiproxy returned a body that is not JSON: $body",
+            failure),
         identity)
     json
       .asArray
@@ -106,18 +111,33 @@ object Toxiproxy {
       .toList
       .map { toxic =>
         def str(field: String): String =
-          toxic.hcursor.get[String](field).fold(err => throw new IllegalStateException(
-            s"toxic is missing a String `$field`: $body", err), identity)
+          toxic
+            .hcursor
+            .get[String](field)
+            .fold(
+              err =>
+                throw new IllegalStateException(
+                  s"toxic is missing a String `$field`: $body",
+                  err),
+              identity)
         def attr(field: String): Int =
-          toxic.hcursor.downField("attributes").get[Int](field).fold(
-            err => throw new IllegalStateException(
-              s"toxic is missing an Int `attributes.$field`: $body", err),
-            identity)
+          toxic
+            .hcursor
+            .downField("attributes")
+            .get[Int](field)
+            .fold(
+              err =>
+                throw new IllegalStateException(
+                  s"toxic is missing an Int `attributes.$field`: $body",
+                  err),
+              identity)
         Toxic(str("name"), str("type"), str("stream"), attr("latency"), attr("jitter"))
       }
   }
 
-  /** Removes every toxic on the proxy, restoring an un-delayed connection. */
+  /**
+   * Removes every toxic on the proxy, restoring an un-delayed connection.
+   */
   def clearToxics(): Unit =
     listToxics().foreach { toxic =>
       // 404 is tolerated: another caller may have removed it between the list and the delete,
