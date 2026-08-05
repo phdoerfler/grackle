@@ -15,7 +15,10 @@
 
 package grackle.benchmarks.sql
 
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import munit.FunSuite
+import org.typelevel.doobie.implicits._
 
 class ToxiproxySuite extends FunSuite {
 
@@ -55,5 +58,32 @@ class ToxiproxySuite extends FunSuite {
 
     Toxiproxy.setLatency(0)
     assertEquals(Toxiproxy.listToxics(), Nil, "zero latency means no toxics at all")
+  }
+
+  test("an injected toxic actually delays real JDBC traffic through port 5433") {
+    def timeSelect1(): Long = {
+      val started = System.nanoTime()
+      val one =
+        sql"select 1".query[Int].unique.transact(BenchmarkDb.transactor[IO]).unsafeRunSync()
+      assertEquals(one, 1, "sanity: the query itself must actually work")
+      (System.nanoTime() - started) / 1000000L
+    }
+
+    Toxiproxy.clearToxics()
+    val undelayed = timeSelect1()
+
+    Toxiproxy.setLatency(50)
+    val delayed = timeSelect1()
+
+    // A generous floor, not an exact figure: the connection handshake alone crosses the proxy
+    // several times, so the real delta is far larger than 50ms, but asserting a tight band would
+    // make this test flaky on a loaded machine. What is being proven is binary — that the proxy
+    // carries the traffic at all — so the assertion only needs to be well clear of noise.
+    assert(
+      delayed - undelayed > 40,
+      s"a 50ms toxic changed `select 1` by only ${delayed - undelayed}ms " +
+        s"($undelayed ms -> $delayed ms) — the proxy is almost certainly NOT in the connection " +
+        "path, which would silently invalidate every measurement in this phase"
+    )
   }
 }
