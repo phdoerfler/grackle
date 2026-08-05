@@ -17,6 +17,7 @@ package grackle.benchmarks.orm
 
 import scala.jdk.CollectionConverters._
 
+import io.circe.Json
 import jakarta.persistence.EntityManager
 
 /**
@@ -26,11 +27,24 @@ import jakarta.persistence.EntityManager
  */
 object NaiveOrmArm {
 
-  def run(em: EntityManager, shape: Shape, rootCode: String): List[String] = {
+  def run(em: EntityManager, shape: Shape, rootCode: String): Json = {
     val root = em.find(classOf[CountryRegionEntity], rootCode)
-    if (root == null) Nil
-    else descend(root.stateProvinces.asScala.toList, JoinChain.hopsFrom(1, shape.depth), shape)
+    val regions =
+      if (root == null) Vector.empty[Json]
+      else
+        Vector(
+          Json.obj(
+            "countryRegionCode" -> Json.fromString(root.countryRegionCode),
+            firstHop(shape) -> descend(
+              root.stateProvinces.asScala.toList,
+              JoinChain.hopsFrom(1, shape.depth),
+              shape)
+          ))
+    Json.obj("data" -> Json.obj("countryRegions" -> Json.arr(regions: _*)))
   }
+
+  // The root's own hop, consumed by `run` before `descend` takes over.
+  private def firstHop(shape: Shape): String = Selection.hopsFor(shape).head
 
   private object JoinChain {
     // Local alias avoiding a name clash with benchmarksSql's JoinChain while reading similarly;
@@ -40,80 +54,69 @@ object NaiveOrmArm {
       grackle.benchmarks.sql.JoinChain.hops.slice(start, depth)
   }
 
-  // Called unconditionally for every entity `walk` visits, whether or not it's the terminal
-  // (leaf-depth) entity: a hop's wide fields are still "selected at that hop" even when nothing
-  // is nested underneath it (mirrors a GraphQL query's outermost selected field still carrying
-  // its own leaf-field selection). Each entity is visited by exactly one `walk` call, so calling
-  // this at the top of `walk` reads every hop's wide fields exactly once — no double-counting,
-  // and no gap at the terminal hop.
-  private def touchWide(entity: AnyRef, shape: Shape): Unit =
-    if (shape.wideFields) {
-      val _ = entity match {
-        case p: PersonEntity => (p.firstName, p.lastName)
-        case c: CustomerEntity => c.territoryId
-        case s: SalesOrderHeaderEntity => s.totalDue
-        case d: SalesOrderDetailEntity => (d.orderQty, d.unitPrice)
-        case _ => ()
-      }
-    }
-
   private def descend(
       stateProvinces: List[StateProvinceEntity],
       remainingHops: List[String],
-      shape: Shape): List[String] = {
-    def leafNames(entity: AnyRef): List[String] = entity match {
-      case c: ProductCategoryEntity => List(c.name)
-      case _ => Nil
+      shape: Shape): Json = {
+    val terminalHop = Selection.hopsFor(shape).last
+
+    def walk(entity: AnyRef, hop: String, hops: List[String]): Json = {
+      val scalars = OrmJson.scalarsFor(
+        entity = entity,
+        hop = hop,
+        shape = shape,
+        isTerminal = hop == terminalHop)
+      val nested: List[(String, Json)] =
+        hops match {
+          case Nil => Nil
+          case next :: rest =>
+            val child: Json =
+              entity match {
+                case s: StateProvinceEntity if next == "addresses" =>
+                  jsonArr(s.addresses.asScala.toList, next, rest)
+                case a: AddressEntity if next == "businessEntityAddresses" =>
+                  jsonArr(a.businessEntityAddresses.asScala.toList, next, rest)
+                case b: BusinessEntityAddressEntity if next == "person" =>
+                  // `businessEntityAddress.businessEntityId` isn't always a Person: AdventureWorks'
+                  // shared BusinessEntity id space also covers Store/Vendor rows (confirmed live:
+                  // 816 of 19614 businessentityaddress rows have no matching person row) —
+                  // legitimate data, not corruption. Grackle's schema models this hop as nullable
+                  // (`person: Person`, a LEFT JOIN) and emits `"person": null` for those rows, so
+                  // this must emit the key with a null value too, never omit it. `@NotFound(IGNORE)`
+                  // (see `AdventureWorksEntities.scala`) already resolves the dangling FK to null.
+                  jsonOpt(Option(b.person), next, rest)
+                case p: PersonEntity if next == "customers" =>
+                  jsonArr(p.customers.asScala.toList, next, rest)
+                case c: CustomerEntity if next == "salesOrders" =>
+                  jsonArr(c.salesOrders.asScala.toList, next, rest)
+                case s: SalesOrderHeaderEntity if next == "lineItems" =>
+                  jsonArr(s.lineItems.asScala.toList, next, rest)
+                case d: SalesOrderDetailEntity if next == "product" =>
+                  jsonOpt(Option(d.product), next, rest)
+                case p: ProductEntity if next == "subcategory" =>
+                  jsonOpt(Option(p.subcategory), next, rest)
+                case s: ProductSubcategoryEntity if next == "category" =>
+                  jsonOpt(Option(s.category), next, rest)
+                // Reachable only if `JoinChain.hops`, an entity's `@OneToMany(mappedBy=...)`
+                // string, or `EagerOrmArm.hopEntityClass`'s keys ever drift out of sync with each
+                // other. Fail loudly rather than silently truncating the walk, matching every
+                // other string-keyed lookup in this codebase.
+                case _ =>
+                  throw new IllegalStateException(
+                    s"no traversal defined for hop '$next' from entity " +
+                      entity.getClass.getSimpleName)
+              }
+            List(next -> child)
+        }
+      Json.obj(scalars ++ nested: _*)
     }
 
-    def walk(entity: AnyRef, hops: List[String]): List[String] = {
-      touchWide(entity, shape)
-      hops match {
-        case Nil => leafNames(entity)
-        case hop :: rest =>
-          entity match {
-            case s: StateProvinceEntity if hop == "addresses" =>
-              s.addresses.asScala.toList.flatMap(walk(_, rest))
-            case a: AddressEntity if hop == "businessEntityAddresses" =>
-              a.businessEntityAddresses.asScala.toList.flatMap(walk(_, rest))
-            case b: BusinessEntityAddressEntity if hop == "person" =>
-              // `businessEntityAddress.businessEntityId` isn't always a Person: AdventureWorks'
-              // shared BusinessEntity id space also covers Store/Vendor rows (confirmed live: 816
-              // of 19614 businessentityaddress rows have no matching person row) — legitimate
-              // data, not corruption. Grackle's own schema already models this hop as nullable
-              // (`person: Person`, a LEFT JOIN). The entity mapping's `@NotFound(IGNORE)` (see
-              // `AdventureWorksEntities.scala`) makes Hibernate resolve a dangling FK straight to
-              // `null` instead of throwing, so a plain `Option(...)` is sufficient here — no
-              // exception handling needed, mirroring the LEFT JOIN semantics the schema assumes.
-              Option(b.person).toList.flatMap(walk(_, rest))
-            case p: PersonEntity if hop == "customers" =>
-              p.customers.asScala.toList.flatMap(walk(_, rest))
-            case c: CustomerEntity if hop == "salesOrders" =>
-              c.salesOrders.asScala.toList.flatMap(walk(_, rest))
-            case s: SalesOrderHeaderEntity if hop == "lineItems" =>
-              s.lineItems.asScala.toList.flatMap(walk(_, rest))
-            case d: SalesOrderDetailEntity if hop == "product" =>
-              walk(d.product, rest)
-            case p: ProductEntity if hop == "subcategory" =>
-              Option(p.subcategory).toList.flatMap(walk(_, rest))
-            case s: ProductSubcategoryEntity if hop == "category" =>
-              walk(s.category, rest)
-            // Reachable only if `JoinChain.hops`, an entity's `@OneToMany(mappedBy=...)` string,
-            // or `EagerOrmArm.hopEntityClass`'s keys ever drift out of sync with each other — the
-            // `hops == Nil` case (no traversal left to do) is already handled above by
-            // `case Nil => leafNames(entity)`, so any `(entity, hop)` pair reaching here is a real
-            // bug, not a shape that legitimately stops early. Fail loudly rather than silently
-            // truncating the walk, matching every other string-keyed lookup in this codebase
-            // (`EagerOrmArm.hopEntityClass(hop)`, `graph.addSubgraph`, `GrackleShapeQuery`'s
-            // `wideLeafFields(field)`), all of which throw on an unmatched key instead of
-            // returning an empty result that would misleadingly read as "this arm did less work."
-            case _ =>
-              throw new IllegalStateException(
-                s"no traversal defined for hop '$hop' from entity ${entity.getClass.getSimpleName}")
-          }
-      }
-    }
+    def jsonArr(entities: List[AnyRef], hop: String, rest: List[String]): Json =
+      Json.arr(entities.map(e => walk(e, hop, rest)): _*)
 
-    stateProvinces.flatMap(sp => walk(sp, remainingHops))
+    def jsonOpt(entity: Option[AnyRef], hop: String, rest: List[String]): Json =
+      entity.fold(Json.Null)(e => walk(e, hop, rest))
+
+    jsonArr(stateProvinces, "stateProvinces", remainingHops)
   }
 }

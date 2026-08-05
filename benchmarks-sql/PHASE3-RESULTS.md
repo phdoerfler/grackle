@@ -1,5 +1,13 @@
 # Phase 3 results — Grackle vs Hibernate under injected network latency
 
+> **Superseded — awaiting a re-sweep.** These numbers were measured at commit `a2f6bd37`, when the
+> ORM arms returned a `List[String]` of leaf category names and discarded everything else they
+> fetched, while the Grackle arm assembled a full circe response document. The ORM arms now build
+> the same document (see `Selection`, `OrmJson`, and `NaiveOrmArm`), so their figures here
+> understate their per-invocation work. The prediction — not yet verified — is that the slope
+> findings survive intact, because assembly is per-invocation CPU rather than round trips, and that
+> only the zero-latency baselines and the `deep-wide` constant move.
+
 Measured 2026-08-05 against `benchmark-postgres` (AdventureWorks) through Toxiproxy, on a WSL2
 workstation. JMH `Mode.SampleTime`, `@Fork(1)`, 2 warmup + 5 measurement iterations at 5s each,
 48 combinations (3 arms x 4 shapes x 4 latency levels).

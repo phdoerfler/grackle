@@ -25,12 +25,16 @@ class EagerOrmArmSuite extends FunSuite {
     test(s"eager arm returns the same leaf values as naive arm for shape ${shape.name}") {
       val em1 = factory.createEntityManager()
       val naiveNames =
-        try NaiveOrmArm.run(em1, shape, grackle.benchmarks.sql.JoinChain.defaultRootCode)
+        try
+          JsonCanonical.categoryNames(
+            NaiveOrmArm.run(em1, shape, grackle.benchmarks.sql.JoinChain.defaultRootCode))
         finally em1.close()
 
       val em2 = factory.createEntityManager()
       val eagerNames =
-        try EagerOrmArm.run(em2, shape, grackle.benchmarks.sql.JoinChain.defaultRootCode)
+        try
+          JsonCanonical.categoryNames(
+            EagerOrmArm.run(em2, shape, grackle.benchmarks.sql.JoinChain.defaultRootCode))
         finally em2.close()
 
       assertEquals(eagerNames.sorted, naiveNames.sorted)

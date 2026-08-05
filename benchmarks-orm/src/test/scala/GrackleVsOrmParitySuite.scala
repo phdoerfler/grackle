@@ -90,7 +90,7 @@ class GrackleVsOrmParitySuite extends CatsEffectSuite {
 
     val em = factory.createEntityManager()
     val naiveNames =
-      try NaiveOrmArm.run(em, shape, rootCode)
+      try JsonCanonical.categoryNames(NaiveOrmArm.run(em, shape, rootCode))
       finally em.close()
 
     mapping.compileAndRun(GrackleShapeQuery.queryFor(shape, rootCode)).map { result =>
