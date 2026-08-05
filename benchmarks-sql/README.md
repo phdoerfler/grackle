@@ -221,12 +221,29 @@ database is across a network, that same statement count is the whole story.
 0, 5, 20, and 50 alongside its existing three arms and four shapes, giving 48
 combinations in a single run:
 
-    sbt "benchmarksOrm/Jmh/run -rf json -rff results.json"
+    sbt "benchmarksOrm/Jmh/run -rf json -rff results.json OrmVsGrackleBenchmark"
+
+**The trailing class filter is not optional.** `benchmarksOrm` depends on `benchmarksSql`,
+so JMH discovers every benchmark on the combined classpath; without a filter it also runs
+`SqlJoinDepthBenchmark` and `RawVsGrackleBenchmark`, which carry `@Fork(3)` and 10s
+iterations and roughly double the wall-clock time.
 
 Every level, including 0, goes through Toxiproxy, so the baseline carries the proxy's own
 hop cost too and is directly comparable with the delayed levels. The toxic is applied per
 trial, before the pooled transactor and `EntityManagerFactory` are built, so connection
 establishment pays the injected RTT as well; it is cleared in trial teardown.
+
+All three arms run inside a transaction — the ORM arms via `OrmVsGrackleBenchmark`'s own
+`inTransaction` helper, the Grackle arm via doobie's `transact`. This matters more than it
+sounds: a transaction costs one extra round trip per invocation — `COMMIT` alone, since
+pgjdbc folds `BEGIN` into the first statement's flush — and an earlier sweep ran the ORM
+arms in autocommit while the Grackle arm was transactional. That handed the ORM arms a
+one-round-trip advantage per invocation, which is decisive on the single-statement tuned
+shapes and invisible on the N+1 ones — enough to flip which arm wins at 50ms. Making the
+arms symmetric moved the eager arm's slope from 0.92-1.02 to 1.94-2.07 on the three tuned
+shapes (and 263.2 to 264.3 on `untuned`), putting it level with the Grackle arm's ~2. Running one arm transactional and the other not is the one configuration
+that cannot be defended, and `@Transactional(readOnly = true)` is standard on Spring read
+endpoints anyway, which is the practice the eager arm already mirrors.
 
 That RTT is split across a pair of directional toxics — a 20ms level is a 10ms upstream
 toxic plus a 10ms downstream one — because real latency accrues in both directions. Odd

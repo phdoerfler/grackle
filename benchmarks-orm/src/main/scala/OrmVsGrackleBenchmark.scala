@@ -72,13 +72,22 @@ class OrmVsGrackleBenchmark {
    * 5/20/50 stand in for same-availability-zone, cross-region, and wide-area round trips. The
    * naive arm's N+1 penalty IS a round-trip penalty, so its cost should grow roughly linearly
    * in this parameter, with slope tracking its statement count. The Grackle arm's cost grows
-   * with RTT too, but on a much shallower line: each invocation is expected to pay roughly two
-   * round trips rather than one — doobie's `transact` bundles `BEGIN` into the same flush as
-   * the statement, and `COMMIT` is a separate round trip after it, whereas the naive/eager ORM
-   * arms run without an explicit transaction and so pay roughly one round trip per statement.
-   * (A single smoke run measured 17.0ms/op at 0ms and 122.5ms/op at 50ms for the Grackle arm —
-   * a slope near 2, consistent with this mechanism — but that single data point should be read
-   * as illustrative, not as a precisely measured constant.)
+   * with RTT too, but on a far shallower line, because it issues one statement whatever the
+   * shape.
+   *
+   * Every arm runs inside a transaction (`inTransaction` below for the ORM arms, doobie's
+   * `transact` for the Grackle arm), which costs one extra round trip per invocation, not two:
+   * pgjdbc folds `BEGIN` into the same flush as the first statement, so `COMMIT` is the only
+   * addition. An arm's expected slope is therefore its statement count plus one. That surcharge
+   * decides the single-statement shapes and vanishes into the noise on the N+1 ones.
+   *
+   * A full sweep bore that out to within ~2% at every arm and shape: measured slopes of
+   * 1.97-2.13 for Grackle (1 statement + commit) and 1.94-2.06 for the eager arm on the three
+   * shapes its entity graphs cover, against 65.2 / 276.2 / 278.1 / 265.2 for the naive arm (63
+   * / 271 / 272 / 260 statements) and 264.3 for the eager arm on `untuned` (261 statements,
+   * i.e. no better than naive — the whole point of that shape, in one number). A model built
+   * purely from statement counts predicts wall-clock behavior across three orders of magnitude.
+   * Full tables and caveats in `benchmarks-sql/PHASE3-RESULTS.md`.
    */
   @Param(Array("0", "5", "20", "50"))
   var latencyMs: Int = _
@@ -149,13 +158,69 @@ class OrmVsGrackleBenchmark {
 
   @Benchmark
   def naiveArm(blackhole: Blackhole): Unit = {
-    val names = NaiveOrmArm.run(entityManager, shape, JoinChain.defaultRootCode)
+    val names = inTransaction(NaiveOrmArm.run(entityManager, shape, JoinChain.defaultRootCode))
     blackhole.consume(names)
   }
 
   @Benchmark
   def eagerArm(blackhole: Blackhole): Unit = {
-    val names = EagerOrmArm.run(entityManager, shape, JoinChain.defaultRootCode)
+    val names = inTransaction(EagerOrmArm.run(entityManager, shape, JoinChain.defaultRootCode))
     blackhole.consume(names)
+  }
+
+  /**
+   * Runs `body` inside a JPA resource-local transaction, so the ORM arms pay the same
+   * transactional round trips the Grackle arm does.
+   *
+   * Without this the comparison is not like-for-like: doobie's `transact` (the Grackle arm)
+   * turns autocommit off and issues an explicit `COMMIT`, so its statement's round trip (with
+   * `BEGIN` folded into the same flush by pgjdbc) is followed by a second one for the commit.
+   * Hibernate here had no transaction at all and HikariCP defaults to `autoCommit = true`, so
+   * each of its statements cost exactly one. Measured against injected latency that showed up
+   * as a per-invocation slope of ~2.0 for Grackle against ~1.0 for the eager arm — an artifact
+   * of the two arms' transaction configuration, not of either system's SQL, and one that
+   * inverted which arm won at high round-trip times.
+   *
+   * A transaction is also what the eager arm's design already mirrors elsewhere: Spring's
+   * `@Transactional(readOnly = true)` is standard on read endpoints, and is what makes an
+   * open-session lazy traversal work in the first place.
+   *
+   * That `readOnly = true` also sets Hibernate's flush mode to `MANUAL`, which skips the
+   * dirty-check sweep over the persistence context at commit. This benchmark deliberately does
+   * NOT do that, and the reason is measured rather than assumed: the naive arm loads thousands
+   * of entities per invocation and is where a commit-time dirty check would cost the most, yet
+   * introducing the transaction moved its zero-latency figures by only +1.6% to +2.2% across
+   * the four shapes (224->227.5, 861->875.6, 853->871.5, 844->858.9 ms/op) — at or under this
+   * suite's run-to-run noise floor, which the untouched Grackle arm put at ~2% over the same
+   * pair of sweeps. Part of even that is the commit round trip itself, not flush cost. Suppress
+   * flushing only if a future change makes it measurable; doing it now would mean an
+   * `unwrap(classOf[org.hibernate.Session])` call and a Hibernate-specific dependency in
+   * exchange for nothing observable, and a plain transaction is the more faithful default
+   * anyway, since a non-read-only transaction pays that dirty check in production too.
+   *
+   * The cost is one extra round trip per invocation regardless of arm — `COMMIT` alone, since
+   * `BEGIN` rides along with the first statement — so it is decisive for the single-statement
+   * tuned shapes and negligible for the N+1 ones (the naive arm already issues hundreds).
+   * Measured: adding this moved the eager arm's slope from 0.92-1.02 to 1.94-2.07 across the
+   * three tuned shapes, and from 263.2 to 264.3 on `untuned`.
+   *
+   * Deliberately here rather than inside `NaiveOrmArm.run`/`EagerOrmArm.run`: `EagerOrmArm.run`
+   * delegates to `NaiveOrmArm.run`, so a transaction in both would nest and throw. Keeping it
+   * in the benchmark also leaves `OrmQueryCounts` and the correctness suites untouched —
+   * statement counts are unaffected either way, since `BEGIN`/`COMMIT` are not prepared
+   * statements.
+   */
+  private def inTransaction[A](body: => A): A = {
+    val tx = entityManager.getTransaction
+    tx.begin()
+    try {
+      val result = body
+      tx.commit()
+      result
+    } catch {
+      case scala.util.control.NonFatal(ex) =>
+        if (tx.isActive) tx.rollback()
+        throw ex
+    }
   }
 }

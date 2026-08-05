@@ -83,5 +83,6 @@ query*.sql
 # Benchmarks: generated output, not source. (benchmarks-orm)
 # See benchmarks-sql comment block above for explanation of paths.
 /benchmarks-orm/results.json
+/benchmarks-orm/results-tx.json
 /benchmarks-orm/query-counts.json
 /benchmarks-orm/grackle.benchmarks.orm.*-SampleTime-*/
