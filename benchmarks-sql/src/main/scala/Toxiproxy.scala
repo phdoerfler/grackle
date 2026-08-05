@@ -17,6 +17,7 @@ package grackle.benchmarks.sql
 
 import java.net.URI
 import java.net.http.{HttpClient, HttpRequest, HttpResponse}
+import java.time.Duration
 
 import io.circe.{parser, Json}
 
@@ -45,8 +46,9 @@ object Toxiproxy {
   private val downstreamToxicName = "latency_downstream"
 
   /**
-   * Overridable for the same reason `BenchmarkDb.jdbcUrl` is a constant: one place to change if
-   * the topology ever moves off localhost.
+   * Overridable so a single system property can retarget every caller if the Toxiproxy admin
+   * API ever moves off `localhost:8474` (e.g. a remote or containerized test runner), without
+   * touching call sites.
    */
   def adminBaseUrl: String =
     sys.props.getOrElse("grackle.benchmarks.toxiproxyUrl", "http://localhost:8474")
@@ -59,7 +61,14 @@ object Toxiproxy {
       jitterMs: Int
   )
 
-  private val client: HttpClient = HttpClient.newHttpClient()
+  // The admin API is local and answers in single-digit milliseconds, so 5s is already pathological
+  // for either a connection or a full request/response — a hung admin API (accepts the TCP
+  // connection but never responds) should throw loudly rather than block a trial forever, per
+  // this object's "every failure throws" contract.
+  private val requestTimeout: Duration = Duration.ofSeconds(5)
+
+  private val client: HttpClient =
+    HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()
 
   private def send(request: HttpRequest, expected: Set[Int]): String = {
     val response =
@@ -85,6 +94,7 @@ object Toxiproxy {
     HttpRequest
       .newBuilder(URI.create(s"$adminBaseUrl$path"))
       .header("Content-Type", "application/json")
+      .timeout(requestTimeout)
       .method(method, publisher)
       .build()
   }
@@ -166,6 +176,15 @@ object Toxiproxy {
       addLatencyToxic(upstreamToxicName, "upstream", totalRttMs / 2)
       addLatencyToxic(downstreamToxicName, "downstream", totalRttMs - totalRttMs / 2)
     }
+    // Read back what actually landed rather than trusting the POSTs' 2xx statuses: a trial that
+    // silently ran under the wrong RTT (e.g. Toxiproxy accepting a toxic it then clamps or
+    // rejects internally) would produce a plausible-looking but meaningless number, with nothing
+    // in the JMH output to flag it.
+    val actualRttMs = listToxics().map(_.latencyMs).sum
+    if (actualRttMs != totalRttMs)
+      throw new IllegalStateException(
+        s"requested a total latency of ${totalRttMs}ms but the toxics installed on the proxy " +
+          s"now sum to ${actualRttMs}ms")
   }
 
   private def addLatencyToxic(name: String, stream: String, latencyMs: Int): Unit = {

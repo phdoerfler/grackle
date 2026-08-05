@@ -63,6 +63,13 @@ class SqlJoinDepthBenchmark {
 
   @Setup(Level.Trial)
   def setup(): Unit = {
+    // This benchmark sits behind the Toxiproxy proxy (see the README's topology section) but
+    // never installs a toxic of its own. If a prior `OrmVsGrackleBenchmark` latency run was
+    // interrupted (Ctrl-C, OOM, a `setupTrial` failure on its own final trial — JMH does not run
+    // `@TearDown(Level.Trial)` for a state whose `@Setup` threw), a toxic can be left installed
+    // on the shared proxy, silently delaying every connection this class opens with no visible
+    // symptom. Clearing unconditionally here is a no-op when the proxy is already clean.
+    Toxiproxy.clearToxics()
     val (transactor, release) = BenchmarkDb.transactorResource[IO].allocated.unsafeRunSync()
     releaseTransactor = release
     mapping = AdventureWorksMapping.mkMapping[IO](transactor)

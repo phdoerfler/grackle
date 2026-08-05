@@ -71,7 +71,14 @@ class OrmVsGrackleBenchmark {
    *
    * 5/20/50 stand in for same-availability-zone, cross-region, and wide-area round trips. The
    * naive arm's N+1 penalty IS a round-trip penalty, so its cost should grow roughly linearly
-   * in this parameter while the Grackle arm's, at one statement per query, stays nearly flat.
+   * in this parameter, with slope tracking its statement count. The Grackle arm's cost grows
+   * with RTT too, but on a much shallower line: each invocation is expected to pay roughly two
+   * round trips rather than one — doobie's `transact` bundles `BEGIN` into the same flush as
+   * the statement, and `COMMIT` is a separate round trip after it, whereas the naive/eager ORM
+   * arms run without an explicit transaction and so pay roughly one round trip per statement.
+   * (A single smoke run measured 17.0ms/op at 0ms and 122.5ms/op at 50ms for the Grackle arm —
+   * a slope near 2, consistent with this mechanism — but that single data point should be read
+   * as illustrative, not as a precisely measured constant.)
    */
   @Param(Array("0", "5", "20", "50"))
   var latencyMs: Int = _
