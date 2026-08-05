@@ -64,7 +64,6 @@ class OrmJsonSuite extends FunSuite {
   }
 
   test("throws on a field with no accessor rather than silently omitting it") {
-    val p = new PersonEntity
     intercept[NoSuchElementException] {
       OrmJson.accessor("person", "middleName")
     }
