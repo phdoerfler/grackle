@@ -47,7 +47,10 @@ class ToxiproxySuite extends FunSuite {
     // measure the sum of every level it had already visited.
     Toxiproxy.setLatency(50)
     val resweep = Toxiproxy.listToxics()
-    assertEquals(resweep.size, 2, "a second setLatency must replace the first pair, not add to it")
+    assertEquals(
+      resweep.size,
+      2,
+      "a second setLatency must replace the first pair, not add to it")
     assertEquals(resweep.map(_.latencyMs).sum, 50)
 
     Toxiproxy.setLatency(0)
