@@ -76,13 +76,15 @@ object OrmQueryCounts extends IOApp.Simple {
           val em = factory.createEntityManager()
           try runArm(em, shape, JoinChain.defaultRootCode)
           finally em.close()
-          // NOT `names.nonEmpty` (the walk's returned leaf-name list): `NaiveOrmArm`/
-          // `EagerOrmArm`'s shared `walk`/`leafNames` only recognizes `ProductCategoryEntity` as
-          // a leaf, so that list is structurally empty for any shape whose depth stops short of
-          // the full 10-hop chain (`shallowNarrow` depth 3, `untuned` depth 7 both never reach
-          // "category") — that's true for every arm, not a failure mode. What this guard
-          // actually needs to catch is a shape that did no SQL work at all, which the statement
-          // count (the metric under test) answers directly.
+          // NOT a non-emptiness check on `runArm`'s returned document: unlike the old
+          // `List[String]` return, the document is always non-empty once the root is found — it
+          // always carries the root's own `countryRegionCode` scalar and its envelope — whether
+          // or not the shape's depth ever reaches `"category"` (`shallowNarrow` depth 3 and
+          // `untuned` depth 7 both stop short of the full 10-hop chain). That's true for every
+          // arm, not a failure mode, so an emptiness check on the document would be vacuous — it
+          // would never distinguish a shape that did real work from one that did none. What this
+          // guard actually needs to catch is a shape that did no SQL work at all, which the
+          // statement count (the metric under test) answers directly.
           val statements = stats.getPrepareStatementCount.toInt
           require(
             statements > 0,
