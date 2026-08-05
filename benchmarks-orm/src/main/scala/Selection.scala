@@ -23,14 +23,16 @@ import grackle.benchmarks.sql.JoinChain
  * Two consumers read from it and neither owns the lists: `GrackleShapeQuery` renders them into
  * GraphQL query text, and `OrmJson` renders them into a circe document from already-loaded
  * entities. If either hard-coded its own copy they could drift, and the benchmark would compare
- * different work with no visible symptom — which is why every string-keyed lookup here throws on
- * an unmatched key rather than returning an empty result that would read as "this arm did less".
+ * different work with no visible symptom — which is why every string-keyed lookup here throws
+ * on an unmatched key rather than returning an empty result that would read as "this arm did
+ * less".
  */
 object Selection {
 
   /**
-   * Field lists for `wideFields = true` shapes. Mirrors the exact query that originally surfaced
-   * the BigDecimal.equals bug via async-profiler: multiple leaf fields per hop, not just one.
+   * Field lists for `wideFields = true` shapes. Mirrors the exact query that originally
+   * surfaced the BigDecimal.equals bug via async-profiler: multiple leaf fields per hop, not
+   * just one.
    */
   val wideLeafFields: Map[String, List[String]] =
     Map(
@@ -46,7 +48,9 @@ object Selection {
       "category" -> List("name")
     )
 
-  /** The hops this shape traverses, in order. */
+  /**
+   * The hops this shape traverses, in order.
+   */
   def hopsFor(shape: Shape): List[String] = JoinChain.hops.take(shape.depth)
 
   /**
