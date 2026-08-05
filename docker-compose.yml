@@ -36,8 +36,6 @@ services:
     build: ./testdata/benchmark-pg
     profiles: ["benchmarks"]
     command: ["postgres", "-c", "autovacuum=off"]
-    ports:
-      - "5433:5432"
     environment:
       - POSTGRES_DB=benchmark
       - POSTGRES_USER=benchmark
@@ -48,6 +46,31 @@ services:
       timeout: 5s
       retries: 30
       start_period: 60s
+
+  # Sits between the benchmark JVM and benchmark-postgres so a `latency` toxic can be applied
+  # per JMH trial (phase 3). It owns host port 5433, which benchmark-postgres used to publish
+  # directly — so every existing `jdbc:postgresql://localhost:5433/benchmark` URL keeps working
+  # and now transparently runs through the proxy. The proxy itself is created at boot from the
+  # mounted config, not via the admin API, so consumers that never touch the API (the test
+  # suites, AdventureWorksServer, the other JMH classes) find it already there.
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    profiles: ["benchmarks"]
+    command: ["-host=0.0.0.0", "-config=/config/toxiproxy.json"]
+    ports:
+      - "5433:5433"
+      - "8474:8474"
+    volumes:
+      - ./testdata/benchmark-pg/toxiproxy.json:/config/toxiproxy.json:ro
+    depends_on:
+      benchmark-postgres:
+        condition: service_healthy
+    # Exec form, not CMD-SHELL: the toxiproxy image is distroless and has no shell.
+    healthcheck:
+      test: ["CMD", "/toxiproxy-cli", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
