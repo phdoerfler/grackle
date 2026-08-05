@@ -26,27 +26,18 @@ import grackle.benchmarks.sql.JoinChain
  * Field lists mirror the exact query that originally surfaced the BigDecimal.equals bug via
  * async-profiler (see `topic/sql-benchmarks` history): multiple leaf fields per hop, not just
  * one.
+ *
+ * (Phase 4 note: `JoinChain.leafField` did have to become non-private so `Selection` can read
+ * it — a deliberate, minimal exception to that rule, taken because the alternative was
+ * duplicating the narrow leaf-field map and letting the two arms drift.)
  */
 object GrackleShapeQuery {
-  private val wideLeafFields: Map[String, List[String]] =
-    Map(
-      "stateProvinces" -> List("name"),
-      "addresses" -> List("city"),
-      "businessEntityAddresses" -> List("addressTypeId"),
-      "person" -> List("firstName", "lastName"),
-      "customers" -> List("territoryId"),
-      "salesOrders" -> List("totalDue"),
-      "lineItems" -> List("orderQty", "unitPrice"),
-      "product" -> List("name"),
-      "subcategory" -> List("name"),
-      "category" -> List("name")
-    )
-
-  private def nestWide(remaining: List[String]): String =
+  private def nestWide(remaining: List[String], shape: Shape): String =
     remaining match {
-      case field :: Nil => s"$field { ${wideLeafFields(field).mkString(" ")} }"
+      case field :: Nil =>
+        s"$field { ${Selection.fieldsAt(field, shape, isTerminal = true).mkString(" ")} }"
       case field :: rest =>
-        s"$field { ${wideLeafFields(field).mkString(" ")} ${nestWide(rest)} }"
+        s"$field { ${Selection.fieldsAt(field, shape, isTerminal = false).mkString(" ")} ${nestWide(rest, shape)} }"
       case Nil => throw new IllegalStateException("unreachable: depth bounds checked by Shape")
     }
 
@@ -54,5 +45,6 @@ object GrackleShapeQuery {
     if (!shape.wideFields) JoinChain.queryForDepth(shape.depth, rootCode)
     else
       s"""query { countryRegions(code: "$rootCode") { countryRegionCode ${nestWide(
-          JoinChain.hops.take(shape.depth))} } }"""
+          Selection.hopsFor(shape),
+          shape)} } }"""
 }

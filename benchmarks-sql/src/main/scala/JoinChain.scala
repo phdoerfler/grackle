@@ -35,7 +35,10 @@ object JoinChain {
 
   val maxDepth: Int = hops.length
 
-  private val leafField: Map[String, String] =
+  // Not private: `benchmarksOrm`'s `Selection` reads this so the ORM arms' JSON assembly selects
+  // exactly the fields this module's generated GraphQL selects. Duplicating the map there instead
+  // would let the two arms silently drift into measuring different work.
+  val leafField: Map[String, String] =
     Map(
       "stateProvinces" -> "name",
       "addresses" -> "city",
