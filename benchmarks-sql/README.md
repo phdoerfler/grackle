@@ -188,3 +188,41 @@ Force a clean rebuild:
     docker compose --profile benchmarks build benchmark-postgres
 
 then `sbt benchPgUp` as usual.
+
+## Latency sweep (phase 3)
+
+Query counts prove the N+1 gap exists; injected round-trip time is what shows what it
+costs. On a local Docker network the RTT to Postgres is near zero, so the naive ORM arm's
+~260 extra statements cost only a few hundred milliseconds — in production, where the
+database is across a network, that same statement count is the whole story.
+
+`OrmVsGrackleBenchmark` (in the `benchmarksOrm` module) sweeps a `latencyMs` param over
+0, 5, 20, and 50 alongside its existing three arms and four shapes, giving 48
+combinations in a single run:
+
+    sbt "benchmarksOrm/Jmh/run -rf json -rff results.json"
+
+Every level, including 0, goes through Toxiproxy, so the baseline carries the proxy's own
+hop cost too and is directly comparable with the delayed levels. The toxic is applied per
+trial, before the pooled transactor and `EntityManagerFactory` are built, so connection
+establishment pays the injected RTT as well; it is cleared in trial teardown.
+
+That RTT is split across a pair of directional toxics — a 20ms level is a 10ms upstream
+toxic plus a 10ms downstream one — because real latency accrues in both directions. Odd
+values split unevenly (5ms becomes 2 + 3) so the pair always sums to exactly the level.
+Jitter is fixed at 0: deterministic latency keeps run-to-run comparison clean.
+
+This class carries reduced JMH settings (`@Fork(1)`, 2 warmup + 5 measurement iterations
+at 5s each) rather than the `@Fork(3)`/5/10-at-10s used elsewhere in this repo. The
+matrix is four times larger than phase 2's, and the naive arm at depth under a 50ms RTT
+spends roughly 13.5s per invocation on network round-trips alone — a single iteration
+cannot even complete in 5s there. Budget roughly an hour and a half for a bare run. The
+effect being measured is large enough that this trade is cheap; for a publishable-tier
+run, override on the command line, e.g. `-f 3 -wi 5 -i 10 -r 10s -w 10s`.
+
+To reproduce one point by hand, or to explore a level not in the sweep:
+
+    sbt "benchmarksOrm/Jmh/run -p latencyMs=20 -p shapeName=deep-narrow OrmVsGrackleBenchmark"
+
+Query counts are unaffected by any of this and need no re-measurement: latency cannot
+change how many statements are issued, only what each one costs.

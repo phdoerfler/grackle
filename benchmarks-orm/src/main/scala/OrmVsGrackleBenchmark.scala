@@ -24,7 +24,7 @@ import org.openjdk.jmh.annotations._
 import org.openjdk.jmh.infra.Blackhole
 
 import grackle.Mapping
-import grackle.benchmarks.sql.{AdventureWorksMapping, BenchmarkDb, JoinChain}
+import grackle.benchmarks.sql.{AdventureWorksMapping, BenchmarkDb, JoinChain, Toxiproxy}
 
 /**
  * Combined timing comparison: Grackle vs Hibernate-naive vs Hibernate-eager, across the four
@@ -49,13 +49,32 @@ import grackle.benchmarks.sql.{AdventureWorksMapping, BenchmarkDb, JoinChain}
 @State(Scope.Benchmark)
 @BenchmarkMode(Array(Mode.SampleTime))
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
-@Fork(3)
-@Warmup(iterations = 5)
-@Measurement(iterations = 10)
+// Reduced from phase 2's @Fork(3)/5/10 at JMH's 10s default iteration time. The parameter matrix
+// grew from 12 combinations to 48, and the naive arm's deep shapes are far slower under load —
+// roughly 270 statements at 50ms round-trip is about 13.5s of pure network time per invocation.
+// The effect being measured here is enormous (hundreds of milliseconds against tens of seconds,
+// growing with RTT), so tight confidence intervals matter far less than they did in phase 1's
+// noise-bound work. Override on the command line for a publishable-tier run.
+@Fork(1)
+@Warmup(iterations = 2, time = 5, timeUnit = TimeUnit.SECONDS)
+@Measurement(iterations = 5, time = 5, timeUnit = TimeUnit.SECONDS)
 class OrmVsGrackleBenchmark {
 
   @Param(Array("shallow-narrow", "deep-narrow", "deep-wide", "untuned"))
   var shapeName: String = _
+
+  /**
+   * Target round-trip time in milliseconds, injected between this JVM and `benchmark-postgres`
+   * by Toxiproxy (see `Toxiproxy` and the README's topology section). 0 still goes through the
+   * proxy — with no toxics installed — so the baseline includes the proxy's own hop cost and is
+   * apples-to-apples with the delayed levels rather than measuring a different topology.
+   *
+   * 5/20/50 stand in for same-availability-zone, cross-region, and wide-area round trips. The
+   * naive arm's N+1 penalty IS a round-trip penalty, so its cost should grow roughly linearly
+   * in this parameter while the Grackle arm's, at one statement per query, stays nearly flat.
+   */
+  @Param(Array("0", "5", "20", "50"))
+  var latencyMs: Int = _
 
   private var shape: Shape = _
   private var grackleMapping: Mapping[IO] = _
@@ -72,6 +91,12 @@ class OrmVsGrackleBenchmark {
 
   @Setup(Level.Trial)
   def setupTrial(): Unit = {
+    // First, before anything opens a connection: the pooled transactor and EntityManagerFactory
+    // built below establish their connections during this method, and those must be established
+    // under the same network conditions the benchmark will run under. Trial level, not iteration
+    // or invocation level — changing a toxic mid-measurement would mix samples taken under
+    // different network conditions into one result.
+    Toxiproxy.setLatency(latencyMs)
     shape = OrmQueryShapes
       .all
       .find(_.name == shapeName)
@@ -94,6 +119,9 @@ class OrmVsGrackleBenchmark {
 
   @TearDown(Level.Trial)
   def teardownTrial(): Unit = {
+    // Before the closes below, not after: if one of them throws, an uncleared toxic would leak
+    // into the next trial and silently add its latency on top of that trial's own.
+    Toxiproxy.clearToxics()
     if (entityManagerFactory != null) entityManagerFactory.close()
     if (releaseTransactor != null) releaseTransactor.unsafeRunSync()
   }
