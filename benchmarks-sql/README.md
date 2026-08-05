@@ -24,10 +24,27 @@ The proxy is created at container start from `testdata/benchmark-pg/toxiproxy.js
 (mounted read-only), not via the admin API, so it is already present for consumers that
 never touch the API — the test suites, `AdventureWorksServer`, and the other JMH classes.
 It starts with no toxics, i.e. zero added latency, so anything that does not deliberately
-inject latency behaves exactly as it did before.
+inject latency behaves as it did before *modulo* the proxy's own hop cost: every consumer
+of port 5433 now pays one extra userspace round trip per TCP interaction, whether or not
+it ever calls the admin API. That cost has not been quantified but is expected to be
+sub-percent; see the measurement caveats below for what it means for older figures.
 
 `sbt benchPgUp` starts both services and waits for both to be healthy; `sbt benchPgStop`
-stops both.
+stops both. `sbt benchPgUp` will NOT clear a toxic left behind by an interrupted latency
+run, since `docker compose up -d --wait` is a no-op against an already-healthy container
+and toxics live only in the proxy's memory, not in the mounted config file. Check for one
+with:
+
+    curl -s http://localhost:8474/proxies/benchmark-postgres/toxics
+
+An empty `[]` means the proxy is clean. If it is not, clear it with:
+
+    docker compose --profile benchmarks restart toxiproxy
+
+`SqlJoinDepthBenchmark` and `RawVsGrackleBenchmark` also guard against this themselves —
+each clears toxics as the first step of its own `@Setup(Level.Trial)` — but the check
+above is the fastest way to confirm the proxy's state directly, e.g. before trusting a
+number that looks off.
 
 `benchmarksSql` is a standalone sbt project, not aggregated into the root build (see
 `build.sbt`): a plain `sbt test` / `sbt compile` at the repo root will not touch it,
@@ -167,6 +184,10 @@ curve, but are not a clean measurement of Grackle's own cost in isolation:
   roughly 10x yields hundreds of samples per iteration, which is what makes the
   percentile numbers meaningful. The depth→time curve should not be read as covering the
   dataset's full result-set size.
+- Figures measured before phase 3 (the Toxiproxy topology described above) were taken
+  without a proxy hop in the path at all, not merely with zero added latency. They are
+  not directly comparable to a post-phase-3 zero-latency figure to better than whatever
+  that hop costs, which has not been quantified.
 
 ## Rebuilding after a seed-script or Dockerfile change
 
@@ -216,9 +237,22 @@ This class carries reduced JMH settings (`@Fork(1)`, 2 warmup + 5 measurement it
 at 5s each) rather than the `@Fork(3)`/5/10-at-10s used elsewhere in this repo. The
 matrix is four times larger than phase 2's, and the naive arm at depth under a 50ms RTT
 spends roughly 13.5s per invocation on network round-trips alone — a single iteration
-cannot even complete in 5s there. Budget roughly an hour and a half for a bare run. The
-effect being measured is large enough that this trade is cheap; for a publishable-tier
-run, override on the command line, e.g. `-f 3 -wi 5 -i 10 -r 10s -w 10s`.
+cannot even complete in 5s there. Estimate 40-50 minutes for a bare run: 7 iterations x
+5s = 35s per combination for every combination whose op fits inside an iteration (all 16
+Grackle combos, 12 of 16 eager combos), plus the handful of overruns — the naive arm's
+deep shapes and the untuned eager shape at 50ms (~13.5s/invocation, so ~95s) and at 20ms
+(~38s) — totals roughly 32 minutes of iteration time, plus 48 fork startups with pool
+creation, an 11-statement prewarm, and Hibernate EMF boot on top of that, another 5-8
+minutes. Treat this as an estimate, not a promise — it has not been measured end to end.
+The effect being measured is large enough that this trade is cheap; for a
+publishable-tier run, override on the command line, e.g. `-f 3 -wi 5 -i 10 -r 10s -w
+10s`.
+
+For the deep shapes at `latencyMs=50`, a 5s iteration completes roughly one invocation,
+so a trial yields only about 5 measurement samples. `Mode.SampleTime` still emits
+p99/p100 columns into `results.json` for those combinations regardless — read Score/mean
+only there, not the percentile columns; see the measurement caveats above for the same
+point made about phase 1's depth-10 figures.
 
 To reproduce one point by hand, or to explore a level not in the sweep:
 
