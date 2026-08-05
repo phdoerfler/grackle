@@ -47,11 +47,11 @@ import grackle.doobie.DoobieMonitor
  *
  * Expect `deep-narrow` and `deep-wide`'s naive/eager counts (and their timings in
  * `OrmVsGrackleBenchmark`) to come out identical: Hibernate always selects every mapped scalar
- * column of a row when it loads an entity, and `NaiveOrmArm.touchWide` only reads fields
- * already materialized in memory, so `Shape.wideFields` never changes how much SQL the ORM arms
- * issue — only which of Grackle's own selected columns change (`GrackleShapeQuery.nestWide`
- * genuinely selects extra fields at every hop for `deep-wide`). Identical `naive`/`eager`
- * numbers across those two shapes are therefore the CORRECT result, not a bug in this harness.
+ * column of a row when it loads an entity, and `OrmJson.scalarsFor` only reads fields already
+ * materialized in memory, so `Shape.wideFields` never changes how much SQL the ORM arms issue —
+ * only which of Grackle's own selected columns change (`GrackleShapeQuery.nestWide` genuinely
+ * selects extra fields at every hop for `deep-wide`). Identical `naive`/`eager` numbers across
+ * those two shapes are therefore the CORRECT result, not a bug in this harness.
  *
  * sbt "benchmarksOrm/runMain grackle.benchmarks.orm.OrmQueryCounts"
  */
