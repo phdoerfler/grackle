@@ -22,22 +22,21 @@ class EagerOrmArmSuite extends FunSuite {
   override def afterAll(): Unit = factory.close()
 
   OrmQueryShapes.all.foreach { shape =>
-    test(s"eager arm returns the same leaf values as naive arm for shape ${shape.name}") {
+    test(s"eager arm returns the same document as naive arm for shape ${shape.name}") {
       val em1 = factory.createEntityManager()
-      val naiveNames =
-        try
-          JsonCanonical.categoryNames(
-            NaiveOrmArm.run(em1, shape, grackle.benchmarks.sql.JoinChain.defaultRootCode))
+      val naiveDoc =
+        try NaiveOrmArm.run(em1, shape, grackle.benchmarks.sql.JoinChain.defaultRootCode)
         finally em1.close()
 
       val em2 = factory.createEntityManager()
-      val eagerNames =
-        try
-          JsonCanonical.categoryNames(
-            EagerOrmArm.run(em2, shape, grackle.benchmarks.sql.JoinChain.defaultRootCode))
+      val eagerDoc =
+        try EagerOrmArm.run(em2, shape, grackle.benchmarks.sql.JoinChain.defaultRootCode)
         finally em2.close()
 
-      assertEquals(eagerNames.sorted, naiveNames.sorted)
+      assertEquals(
+        JsonCanonical.canonicalize(eagerDoc),
+        JsonCanonical.canonicalize(naiveDoc),
+        s"documents differ for shape ${shape.name}")
     }
   }
 }

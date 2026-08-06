@@ -71,50 +71,52 @@ object EagerOrmArm {
   }
 
   def run(em: EntityManager, shape: Shape, rootCode: String): Json = {
-    val root =
-      if (!shape.tuned) em.find(classOf[CountryRegionEntity], rootCode)
-      else {
-        import scala.jdk.CollectionConverters._
-        val graph = buildEntityGraph(em, shape.depth)
-        val hints: java.util.Map[String, Object] =
-          Map[String, Object]("jakarta.persistence.loadgraph" -> graph).asJava
-        // `loadgraph`, not `fetchgraph`: the two JPA-standard graph hints differ in how they
-        // treat attributes NOT explicitly listed in the graph. `fetchgraph` forces them to
-        // LAZY, overriding their mapped fetch type; `loadgraph` leaves them at their originally
-        // mapped default instead. That distinction matters here because of `person`
-        // specifically: `@NotFound` (see `AdventureWorksEntities.scala`) makes that association
-        // structurally non-lazy (no proxy class can defer the not-found check), so for any
-        // shape whose graph stops short of the `person` hop (e.g. `shallowNarrow`), a
-        // `fetchgraph` hint asks Hibernate to do something it can't (treat `person` as lazy),
-        // and Hibernate resolved that conflict by falling back to one immediate secondary
-        // select per `BusinessEntityAddressEntity` row instead of folding the fetch into the
-        // graph's join plan — a real, live-verified N+1 explosion (1852 statements for
-        // `shallowNarrow`, confirmed deterministic across repeated runs). `loadgraph` avoids the
-        // conflict entirely: since `person` isn't in the graph, it stays at its mapped default
-        // (`FetchType.EAGER`, forced by `@NotFound`), so Hibernate applies its normal default
-        // eager-fetch strategy for it — a join into whatever query loads the owning row — the
-        // same strategy `NaiveOrmArm` already benefits from by default. Associations that ARE
-        // explicitly listed in the graph behave identically under both hints; this only changes
-        // the one association affected by `@NotFound`'s forced-eager override.
-        //
-        // The dangling-FK data quirk `NaiveOrmArm` documents on `businessEntityAddress.person`
-        // (a live businessentityaddress row whose businessentityid belongs to a Store/Vendor,
-        // not a Person) used to force this graph-hinted `find` to throw
-        // `FetchNotFoundException` synchronously (Hibernate LEFT JOINing into `person` as part
-        // of this single query, then finding no matching row for a non-null businessentityid) —
-        // handled here via a catch/clear/retry fallback to a plain, ungraphed `find`. That's no
-        // longer needed: the entity mapping's `@NotFound(action = NotFoundAction.IGNORE)` (see
-        // `AdventureWorksEntities.scala`) makes Hibernate resolve the dangling row straight to
-        // `null` instead of throwing, so the graph-hinted `find` below now succeeds
-        // directly, with the entity graph fully applied, for every tuned shape and root code.
-        em.find(classOf[CountryRegionEntity], rootCode, hints)
-      }
-    if (root == null) Json.obj("data" -> Json.obj("countryRegions" -> Json.arr()))
-    else
-      NaiveOrmArm.run(
-        em,
-        shape,
-        rootCode
-      ) // same walk; the graph already preloaded everything above
+    if (shape.tuned) {
+      import scala.jdk.CollectionConverters._
+      val graph = buildEntityGraph(em, shape.depth)
+      val hints: java.util.Map[String, Object] =
+        Map[String, Object]("jakarta.persistence.loadgraph" -> graph).asJava
+      // `loadgraph`, not `fetchgraph`: the two JPA-standard graph hints differ in how they
+      // treat attributes NOT explicitly listed in the graph. `fetchgraph` forces them to
+      // LAZY, overriding their mapped fetch type; `loadgraph` leaves them at their originally
+      // mapped default instead. That distinction matters here because of `person`
+      // specifically: `@NotFound` (see `AdventureWorksEntities.scala`) makes that association
+      // structurally non-lazy (no proxy class can defer the not-found check), so for any
+      // shape whose graph stops short of the `person` hop (e.g. `shallowNarrow`), a
+      // `fetchgraph` hint asks Hibernate to do something it can't (treat `person` as lazy),
+      // and Hibernate resolved that conflict by falling back to one immediate secondary
+      // select per `BusinessEntityAddressEntity` row instead of folding the fetch into the
+      // graph's join plan — a real, live-verified N+1 explosion (1852 statements for
+      // `shallowNarrow`, confirmed deterministic across repeated runs). `loadgraph` avoids the
+      // conflict entirely: since `person` isn't in the graph, it stays at its mapped default
+      // (`FetchType.EAGER`, forced by `@NotFound`), so Hibernate applies its normal default
+      // eager-fetch strategy for it — a join into whatever query loads the owning row — the
+      // same strategy `NaiveOrmArm` already benefits from by default. Associations that ARE
+      // explicitly listed in the graph behave identically under both hints; this only changes
+      // the one association affected by `@NotFound`'s forced-eager override.
+      //
+      // The dangling-FK data quirk `NaiveOrmArm` documents on `businessEntityAddress.person`
+      // (a live businessentityaddress row whose businessentityid belongs to a Store/Vendor,
+      // not a Person) used to force this graph-hinted `find` to throw
+      // `FetchNotFoundException` synchronously (Hibernate LEFT JOINing into `person` as part
+      // of this single query, then finding no matching row for a non-null businessentityid) —
+      // handled here via a catch/clear/retry fallback to a plain, ungraphed `find`. That's no
+      // longer needed: the entity mapping's `@NotFound(action = NotFoundAction.IGNORE)` (see
+      // `AdventureWorksEntities.scala`) makes Hibernate resolve the dangling row straight to
+      // `null` instead of throwing, so the graph-hinted `find` below now succeeds
+      // directly, with the entity graph fully applied, for every tuned shape and root code.
+      //
+      // The result is discarded deliberately: this call's only job is to prime the persistence
+      // context with the graph-hinted load. `NaiveOrmArm.run` below does its own `find` (a
+      // second lookup, resolved from the now-primed context rather than the database) and
+      // handles a null root the same way it always does — there is exactly one place that
+      // decides what a missing root renders as.
+      val _ = em.find(classOf[CountryRegionEntity], rootCode, hints)
+    }
+    NaiveOrmArm.run(
+      em,
+      shape,
+      rootCode
+    ) // same walk; the graph already preloaded everything above
   }
 }
