@@ -47,4 +47,26 @@ object JsonCanonical {
       }
     go(doc)
   }
+
+  /**
+   * A deterministic form of `j`: arrays sorted by their rendered contents, object keys sorted,
+   * and numbers normalized so scale does not matter.
+   *
+   * Array sorting is required because the entities use `java.util.Set` collections, so the ORM
+   * traversal order is not the SQL row order Grackle's document follows — the two documents
+   * hold the same data in different sequence. Number normalization is required because Grackle
+   * decodes `DECIMAL(19,4)` through doobie while Hibernate yields a `java.math.BigDecimal`:
+   * `3953.9884` and `3953.98840` are equal as decimals and unequal as JSON text.
+   *
+   * Sorting keys as well makes the result independent of circe's own object-equality semantics,
+   * so the comparison rests on this function rather than on library behaviour.
+   */
+  def canonicalize(j: Json): Json =
+    j.arrayOrObject(
+      j.asNumber
+        .fold(j)(n =>
+          n.toBigDecimal.fold(j)(d => Json.fromBigDecimal(d.bigDecimal.stripTrailingZeros))),
+      arr => Json.arr(arr.map(canonicalize).sortBy(_.noSpaces): _*),
+      obj => Json.obj(obj.toList.map { case (k, v) => k -> canonicalize(v) }.sortBy(_._1): _*)
+    )
 }

@@ -68,4 +68,20 @@ class OrmJsonSuite extends FunSuite {
       OrmJson.accessor("person", "middleName")
     }
   }
+
+  test("canonicalize sorts arrays and object keys, and normalizes decimal scale") {
+    val a = Json.obj(
+      "b" -> Json.arr(Json.fromString("y"), Json.fromString("x")),
+      "a" -> Json.fromBigDecimal(BigDecimal("1.500")))
+    val b = Json.obj(
+      "a" -> Json.fromBigDecimal(BigDecimal("1.5")),
+      "b" -> Json.arr(Json.fromString("x"), Json.fromString("y")))
+    assertEquals(JsonCanonical.canonicalize(a), JsonCanonical.canonicalize(b))
+  }
+
+  test("canonicalize does not conflate genuinely different documents") {
+    val a = Json.obj("xs" -> Json.arr(Json.fromInt(1), Json.fromInt(2)))
+    val b = Json.obj("xs" -> Json.arr(Json.fromInt(1), Json.fromInt(3)))
+    assertNotEquals(JsonCanonical.canonicalize(a), JsonCanonical.canonicalize(b))
+  }
 }
