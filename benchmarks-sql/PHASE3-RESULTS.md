@@ -96,10 +96,16 @@ where clients choose the shape, "the shape nobody tuned for" is the normal case,
 
 On `deep-wide`, the eager arm beats Grackle at every latency level — 76.9 vs 88.3 ms at 0ms, 174.0
 vs 186.9 at 50ms. The slopes are identical (1.94 vs 1.97), so this is not a round-trip difference:
-it is a constant ~12ms of CPU, and it is the same field-breadth effect phase 2 documented. Grackle's
-per-row response assembly scales with the number of leaf fields selected (`Option`/`Result`
-wrapping per cell); Hibernate's does not, because it materializes the full row either way and
-reading two more already-loaded fields is free.
+it is a constant ~12ms of CPU. At the commit `a2f6bd37` these numbers were measured at, that
+constant was attributed entirely to Grackle's per-row response assembly scaling with the number of
+leaf fields selected (`Option`/`Result` wrapping per cell), on the claim that Hibernate's did not,
+because it materializes the full row either way and reading two more already-loaded fields is
+free. That claim is no longer true of the code: `OrmJson.scalarsFor` now allocates one `Json` per
+selected field per node for both ORM arms too (see the superseded banner at the top), so field
+breadth is no longer a Grackle-only cost — the ORM arms pay for `deep-wide`'s extra fields as
+well, just via a `Json` allocation instead of an `Option`/`Result` wrapper. The `deep-wide` gap
+should therefore be expected to narrow by some amount relative to the figures below, but by how
+much is unmeasured: no re-sweep has been run since the ORM arms started assembling documents.
 
 Grackle wins `shallow-narrow` and `deep-narrow` at every level, loses `deep-wide` by a constant
 margin, and wins `untuned` by ~85x.
@@ -122,6 +128,25 @@ other not is the one configuration that cannot be defended.
 
 Effect on the N+1 shapes was negligible, as predicted: naive slopes moved 274.11 to 276.16 and
 263.02 to 265.15. An arm already issuing hundreds of statements does not notice one more.
+
+## The other asymmetry: Grackle pays to compile its query, every invocation
+
+The transaction asymmetry above was a bug and got fixed. This one is not being fixed, but it is
+now the largest remaining in-region asymmetry between the arms, so it gets named rather than left
+implicit.
+
+`OrmVsGrackleBenchmark.grackleArm` builds the GraphQL query text and calls `compileAndRun` inside
+every measured invocation — there is no compiled-query cache, so the Grackle arm pays parse,
+validate, compile, and SQL generation on every sample. The ORM arms have no equivalent step: their
+traversal code is fixed Scala, not text compiled per call.
+
+This is deliberate, not an oversight: parsing and compiling the request is a real part of serving
+a GraphQL request over the wire, where a client sends query text and the server has not seen it
+compiled ahead of time. Excluding it would measure something Grackle doesn't actually do in that
+setting. But it does mean the comparison charges the Grackle arm for work with no counterpart on
+the other side, on top of the response-assembly work both arms now share. It has not been
+isolated or measured here — the numbers above include it undifferentiated from execution time, and
+no experiment in this document separates the two.
 
 ## Flush mode and the commit-time dirty check — checked, not assumed
 
