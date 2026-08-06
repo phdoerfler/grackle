@@ -110,6 +110,43 @@ much is unmeasured: no re-sweep has been run since the ORM arms started assembli
 Grackle wins `shallow-narrow` and `deep-narrow` at every level, loses `deep-wide` by a constant
 margin, and wins `untuned` by ~85x.
 
+## Memory: Grackle allocates considerably more
+
+Measured directly with `-prof gc` at `deep-wide`, zero injected latency, after the ORM arms began
+assembling documents. Allocation figures are near-deterministic and had tight confidence intervals
+(±0.3% or better); the GC counts and times are run totals over roughly 15 seconds of measurement
+per arm, from three iterations, and are indicative rather than precise.
+
+| arm | ms/op | alloc per op | alloc rate | GC count | GC time |
+|---|---|---|---|---|---|
+| Grackle | 88.8 | **100.6 MB** | **1078 MB/sec** | 47 | 191 ms |
+| eager Hibernate | 82.8 | 43.4 MB | 496 MB/sec | 83 | 352 ms |
+| naive Hibernate | 886.2 | 42.0 MB | 45 MB/sec | 31 | 131 ms |
+
+**Grackle allocates about 2.4x as much per operation as either ORM arm, and churns memory at
+roughly 2.2x the eager arm's rate and 24x the naive arm's.** This is a genuine cost and it is not
+new: phase 1 measured 41.5 MB/op for Grackle at the narrower depth-10 shape and attributed 92% of
+allocation above the raw-JDBC floor to Grackle's own machinery — `Option`/`Result` wrapping,
+cursors, `Object[]`, cons cells — with the circe tree itself accounting for only 12-16%. It is the
+same mechanism behind the `deep-wide` loss above: Grackle's cost scales with the number of leaf
+fields because it builds a node per selected field.
+
+The naive arm's low *rate* is arithmetic, not virtue: it allocates almost exactly as much per
+operation as the eager arm and simply spreads it over ten times the wall clock, because it is
+waiting on 272 round trips.
+
+**The GC columns point the other way, and the reason is instructive.** Over the same wall-clock
+window the eager arm triggers nearly twice as many collections as Grackle (83 against 47) and
+spends nearly twice as long in them (352ms against 191ms), despite allocating at less than half
+Grackle's rate. The likely mechanism is object lifetime rather than volume: Grackle's intermediates
+are short-lived and die in the young generation, which generational collectors handle cheaply,
+whereas Hibernate holds every loaded entity live in the persistence context for the whole
+invocation, so those objects survive minor collections and cost more to trace and promote. A CPU
+profile of the naive arm at this shape put GC at 39% of all on-CPU samples.
+
+So neither side wins this outright: Grackle allocates substantially more, and Hibernate's
+allocations are more expensive to collect. Both belong in any fair account.
+
 ## Fairness: the transaction asymmetry, and how it was caught
 
 The first sweep ran the ORM arms in **autocommit** (no transaction anywhere in

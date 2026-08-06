@@ -26,6 +26,16 @@ import grackle.benchmarks.sql.JoinChain
  * different work with no visible symptom — which is why every string-keyed lookup here throws
  * on an unmatched key rather than returning an empty result that would read as "this arm did
  * less".
+ *
+ * Kept generic although the benchmark only ever runs four fixed shapes, which four hand-written
+ * traversals would also cover. Together with `OrmJson`'s resolver table and `NaiveOrmArm`'s
+ * walk this is a selection set, field resolvers and an interpreter — a hard-coded miniature of
+ * what Grackle does for arbitrary queries, and the difference between the two is the
+ * benchmark's whole point: Grackle's interpreter runs BEFORE the fetch and compiles the
+ * selection into a single SQL statement, while this one runs AFTER, over an object graph whose
+ * loading it cannot influence. A CPU profile put the whole dispatch layer at 3.0% of the naive
+ * arm's application-thread CPU against 64.6% in Hibernate's own entity materialization, so the
+ * generality is close to free.
  */
 object Selection {
 
