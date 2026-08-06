@@ -58,17 +58,14 @@ object NaiveOrmArm {
       shape: Shape): Option[Json] = {
     val terminalHop = Selection.hopsFor(shape).last
 
-    // `product: Product!` and `category: ProductCategory!` are the chain's only non-null to-one
-    // hops (see `AdventureWorksMapping`'s schema). Grackle emits an INNER JOIN for each, so a row
-    // that never reaches one is eliminated from the result set entirely — and with it any ancestor
-    // that has no other surviving path. Mirroring that here is what makes the two arms assemble
-    // the same document, and it is also plain GraphQL semantics: a null in a non-null field
-    // propagates upward and nulls its parent.
+    // Mirroring `Selection.nonNullToOneHops` here is what makes the two arms assemble the same
+    // document, and it is also plain GraphQL semantics: a null in a non-null field propagates
+    // upward and nulls its parent.
     def requiredBelow(rest: List[String]): Boolean =
-      rest.exists(h => h == "product" || h == "category")
+      rest.exists(Selection.nonNullToOneHops)
 
     def walk(entity: AnyRef, hop: String, hops: List[String]): Option[Json] = {
-      val scalars = OrmJson.scalarsFor(
+      def scalars: List[(String, Json)] = OrmJson.scalarsFor(
         entity = entity,
         hop = hop,
         shape = shape,
@@ -135,6 +132,6 @@ object NaiveOrmArm {
     def jsonRequired(entity: Option[AnyRef], hop: String, rest: List[String]): Option[Json] =
       entity.flatMap(e => walk(e, hop, rest))
 
-    jsonArr(stateProvinces, "stateProvinces", remainingHops)
+    jsonArr(stateProvinces, firstHop(shape), remainingHops)
   }
 }
