@@ -28,9 +28,9 @@ import grackle.syntax._
 
 /**
  * A non-null field nested beneath a nullable parent generates an `INNER JOIN` in the same flat
- * join chain as the parent's `LEFT JOIN`, which eliminates rows whose nullable parent is absent.
- * Those rows should come back with the parent as `null`: `c`'s non-null-ness only applies when a
- * `B` exists at all.
+ * join chain as the parent's `LEFT JOIN`, which eliminates rows whose nullable parent is
+ * absent. Those rows should come back with the parent as `null`: `c`'s non-null-ness only
+ * applies when a `B` exists at all.
  *
  * The emitted SQL for `{ as { name b { name c { name } } } }` is:
  *
@@ -41,8 +41,8 @@ import grackle.syntax._
  * }}}
  *
  * Each join is right on its own — `b` is nullable so `LEFT`, `c` is non-null so `INNER` — but
- * they share one flat chain, so an `a` row with a NULL `b_id` gets NULL `b` columns from the left
- * join and is then eliminated by the inner join below it.
+ * they share one flat chain, so an `a` row with a NULL `b_id` gets NULL `b` columns from the
+ * left join and is then eliminated by the inner join below it.
  *
  * The join type appears to be decided by `SqlMapping`'s `SqlSelect.nest`:
  * `val inner = !context.tpe.isNullable && !context.tpe.isList` — derived from the field's own

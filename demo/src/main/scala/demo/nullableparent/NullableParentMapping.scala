@@ -128,7 +128,8 @@ object NullableParentMapping {
       monitor: DoobieMonitor[F]): NullableParentMapping[F] =
     new DoobiePgMapping(transactor, monitor) with NullableParentMapping[F]
 
-  def mkMappingFromTransactor[F[_]: Sync](transactor: Transactor[F]): NullableParentMapping[F] = {
+  def mkMappingFromTransactor[F[_]: Sync](
+      transactor: Transactor[F]): NullableParentMapping[F] = {
     val logger: Logger[F] = Slf4jLogger.getLoggerFromName[F]("SqlQueryLogger")
     mkMapping(transactor, DoobieMonitor.loggerMonitor[F](logger))
   }
