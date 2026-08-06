@@ -7,6 +7,10 @@
 > understate their per-invocation work. The prediction — not yet verified — is that the slope
 > findings survive intact, because assembly is per-invocation CPU rather than round trips, and that
 > only the zero-latency baselines and the `deep-wide` constant move.
+>
+> The ORM arms also now prune branches that the schema's non-null hops (`product: Product!`,
+> `category: ProductCategory!`) eliminate from Grackle's result set, so both arms assemble the
+> same nodes rather than the ORM arms assembling more.
 
 Measured 2026-08-05 against `benchmark-postgres` (AdventureWorks) through Toxiproxy, on a WSL2
 workstation. JMH `Mode.SampleTime`, `@Fork(1)`, 2 warmup + 5 measurement iterations at 5s each,
