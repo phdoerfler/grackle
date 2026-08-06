@@ -16,18 +16,17 @@
 package grackle.benchmarks.orm
 
 import cats.effect.IO
-import io.circe.Json
 import munit.CatsEffectSuite
 
 import grackle.benchmarks.sql.{AdventureWorksMapping, BenchmarkDb, JoinChain}
 
 /**
- * Cross-arm parity check: verifies Grackle's arm and the naive ORM arm traverse the SAME
- * underlying row set, not just that each individually produces output without errors
+ * Cross-arm parity check: verifies Grackle's arm and the naive ORM arm produce the SAME
+ * response document — not just that each individually produces output without errors
  * (`GrackleShapeQuerySuite`, `NaiveOrmArmSuite`) or that the ORM arms agree with each other
  * (`EagerOrmArmSuite`). Nothing else in this suite checks the two different technology stacks —
  * Grackle's LEFT-JOIN-based SQL and Hibernate's lazy entity traversal — actually reach the same
- * data.
+ * data and assemble it into the same shape.
  *
  * This matters specifically because of `BusinessEntityAddressEntity.person`'s
  * `@NotFound(action = NotFoundAction.IGNORE)` mapping (see `AdventureWorksEntities.scala`),
@@ -37,87 +36,42 @@ import grackle.benchmarks.sql.{AdventureWorksMapping, BenchmarkDb, JoinChain}
  * equivalence claim was previously only asserted in a code comment; this test actually
  * exercises it end to end.
  *
- * Uses the `deep-narrow` shape (full depth 10, one field per hop): the shape most directly
- * comparable across arms, since neither `wideFields` nor `tuned` changes which rows are
- * reached, only which columns are selected or how many statements are issued (see
- * `OrmQueryCounts` and `OrmVsGrackleBenchmark`'s class docs on that distinction).
+ * Runs both `deep-narrow` and `deep-wide` (full depth 10). `deep-narrow` (one field per hop) is
+ * the shape most directly comparable across arms, since neither `wideFields` nor `tuned`
+ * changes which rows are reached, only which columns are selected or how many statements are
+ * issued (see `OrmQueryCounts` and `OrmVsGrackleBenchmark`'s class docs on that distinction).
+ * `deep-wide` layers on top of that: because the comparison is whole-document equality rather
+ * than a set of leaf names, it additionally proves the two arms select the SAME scalar fields
+ * at every hop, not merely that they reach the same rows.
  */
 class GrackleVsOrmParitySuite extends CatsEffectSuite {
   val mapping = AdventureWorksMapping.mkMapping[IO](BenchmarkDb.transactor[IO])
   val factory = OrmDb.emf()
   override def afterAll(): Unit = factory.close()
 
-  // (GraphQL field name, isList) for each hop from CountryRegion down to ProductCategory,
-  // matching JoinChain.hops in traversal order. Same list AdventureWorksMappingSuite
-  // (benchmarksSql) uses to walk a single path through the result; this one collects every leaf
-  // reached, not just the first, since the naive ORM arm's `List[String]` is a full leaf-name
-  // multiset, not a single sample.
-  val hopsWithCardinality: List[(String, Boolean)] =
-    List(
-      "stateProvinces" -> true,
-      "addresses" -> true,
-      "businessEntityAddresses" -> true,
-      "person" -> false,
-      "customers" -> true,
-      "salesOrders" -> true,
-      "lineItems" -> true,
-      "product" -> false,
-      "subcategory" -> false,
-      "category" -> false
-    )
+  List(OrmQueryShapes.deepNarrow, OrmQueryShapes.deepWide).foreach { shape =>
+    test(s"grackle arm and naive ORM arm produce the same document for shape ${shape.name}") {
+      val rootCode = JoinChain.defaultRootCode
 
-  /**
-   * Every JSON node reached by following every branch of `hops` from `current`.
-   */
-  def descendAll(current: Json, hops: List[(String, Boolean)]): List[Json] =
-    hops match {
-      case Nil => List(current)
-      case (field, isList) :: rest =>
-        current.hcursor.downField(field).focus match {
-          case None => Nil
-          case Some(next) =>
-            if (isList)
-              next.asArray.getOrElse(Vector.empty).toList.flatMap(descendAll(_, rest))
-            else if (next.isNull) Nil
-            else descendAll(next, rest)
-        }
-    }
+      val em = factory.createEntityManager()
+      val ormDoc =
+        try NaiveOrmArm.run(em, shape, rootCode)
+        finally em.close()
 
-  test(
-    "grackle arm and naive ORM arm reach the same set of category names for shape deep-narrow") {
-    val shape = OrmQueryShapes.deepNarrow
-    val rootCode = JoinChain.defaultRootCode
+      mapping.compileAndRun(GrackleShapeQuery.queryFor(shape, rootCode)).map { grackleDoc =>
+        assert(
+          !grackleDoc.hcursor.downField("errors").succeeded,
+          s"unexpected GraphQL errors: $grackleDoc")
 
-    val em = factory.createEntityManager()
-    val naiveNames =
-      try JsonCanonical.categoryNames(NaiveOrmArm.run(em, shape, rootCode))
-      finally em.close()
+        // Non-degenerate: two empty documents would satisfy the equality below and prove nothing.
+        val names = JsonCanonical.categoryNames(ormDoc)
+        assert(names.nonEmpty, s"ORM document reached no category names for ${shape.name}")
 
-    mapping.compileAndRun(GrackleShapeQuery.queryFor(shape, rootCode)).map { result =>
-      assert(
-        !result.hcursor.downField("errors").succeeded,
-        s"unexpected GraphQL errors: $result")
-
-      val countryRegions =
-        result
-          .hcursor
-          .downField("data")
-          .downField("countryRegions")
-          .focus
-          .flatMap(_.asArray)
-          .getOrElse(Vector.empty)
-
-      val grackleNames =
-        countryRegions
-          .toList
-          .flatMap(cr => descendAll(cr, hopsWithCardinality))
-          .flatMap(_.hcursor.downField("name").as[String].toOption)
-
-      assert(naiveNames.nonEmpty, "naive arm reached no category names — test proves nothing")
-      assertEquals(
-        grackleNames.sorted,
-        naiveNames.sorted,
-        "grackle arm and naive ORM arm should traverse the same underlying category-name row set")
+        assertEquals(
+          JsonCanonical.canonicalize(ormDoc),
+          JsonCanonical.canonicalize(grackleDoc),
+          s"documents differ for shape ${shape.name}")
+      }
     }
   }
 }
