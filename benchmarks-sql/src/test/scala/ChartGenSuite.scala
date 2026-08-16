@@ -24,6 +24,10 @@ class ChartGenSuite extends FunSuite {
   test("chart data loads from the classpath resource") {
     assertEquals(data.statementsPerShape.shapes.length, 4)
     assertEquals(data.grackleStatementsByDepth.statements, List.fill(10)(1))
+    assertEquals(data.naiveStatementsByDepth.statements.length, 10)
+    assert(
+      data.naiveStatementsByDepth.statements.last > data.naiveStatementsByDepth.statements.head,
+      "naive per-depth counts should climb with depth")
     assertEquals(data.rowsByDepth.unfiltered.last, 61898)
     assertEquals(data.rowsByDepth.filtered.last, 5677)
   }
@@ -35,18 +39,34 @@ class ChartGenSuite extends FunSuite {
     assertEquals(ChartGen.axisMax(61898), 65000)
   }
 
-  test("statements-per-shape renders the expected mermaid block") {
-    val expected =
-      """```mermaid
-        |xychart-beta
-        |  title "SQL statements per query shape"
-        |  x-axis ["shallow-narrow", "deep-narrow", "deep-wide", "untuned"]
-        |  y-axis "statements issued" 0 --> 300
-        |  line [63, 271, 272, 260]
-        |  line [1, 1, 1, 261]
-        |  line [1, 1, 1, 1]
-        |```""".stripMargin
-    assertEquals(ChartGen.statementsPerShape(data.statementsPerShape), expected)
+  test("the statements-per-shape SVG is well-formed and carries the data") {
+    val c = ChartGen.charts(data).find(_.id == "statements-per-shape").get
+    val svg = ChartGen.renderSvg(c)
+
+    assert(svg.startsWith("<svg "), "should be an SVG document")
+    assert(svg.trim.endsWith("</svg>"), "should be closed")
+    // One <rect> panel + one per (category x series) bar; legend adds one swatch <rect> per series.
+    val bars = 4 * 3
+    val rects = "<rect".r.findAllIn(svg).length
+    assertEquals(rects, 1 + bars + c.series.length, "panel + bars + legend swatches")
+    // Legend names and a value label are present.
+    assert(svg.contains(">naive ORM<"), "legend should name the naive arm")
+    assert(svg.contains(">Grackle<"), "legend should name Grackle")
+    assert(svg.contains(">272<"), "a value label should be rendered")
+    // No generated ids or locale-dependent decimals, so `check` can diff byte-for-byte. A
+    // locale-formatted coordinate would show a comma immediately before a digit (e.g. "12,5"); the
+    // commas in font-family lists are always followed by a space, so this stays clean.
+    assert(!svg.contains("id="), "SVG must not contain generated ids")
+    assert(
+      ",\\d".r.findFirstIn(svg).isEmpty,
+      "coordinates must be integers, not locale decimals")
+  }
+
+  test("the rows SVG formats large y-axis ticks in thousands") {
+    val c = ChartGen.charts(data).find(_.id == "rows-by-depth").get
+    val svg = ChartGen.renderSvg(c)
+    assert(svg.contains(">65k<"), "y-axis top tick should read 65k")
+    assert(svg.contains(">13k<"), "y-axis ticks should be in thousands")
   }
 
   test("splice replaces only the content between a chart's markers") {
@@ -66,16 +86,18 @@ class ChartGenSuite extends FunSuite {
         |outro""".stripMargin)
   }
 
-  test("render is idempotent — regenerating an up-to-date doc changes nothing") {
+  test("renderReadme injects an img tag per chart and is idempotent") {
     val doc = ChartGen
       .charts(data)
       .map(_.id)
       .map(id => s"<!-- CHART:$id START -->\n<!-- CHART:$id END -->")
       .mkString("\n\n")
-    val once = ChartGen.render(doc, data)
-    val twice = ChartGen.render(once, data)
+    val once = ChartGen.renderReadme(doc, data)
+    val twice = ChartGen.renderReadme(once, data)
     assertEquals(twice, once)
-    assert(once.contains("xychart-beta"), "rendered doc should contain the charts")
+    assert(
+      once.contains("""<img src="charts/statements-per-shape.svg""""),
+      "should embed the generated SVG by relative path")
   }
 
   test("splice fails loudly on a missing marker") {

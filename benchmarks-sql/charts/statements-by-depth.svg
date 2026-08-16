@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <rect x="0" y="0" width="640" height="360" rx="2" fill="#ffffff" stroke="#e2e6ec"/>
+  <text x="64" y="26" text-anchor="start" font-size="15" fill="#161b24" font-weight="600">SQL statements vs join depth</text>
+  <rect x="64" y="35" width="12" height="12" rx="2" fill="#d1495b"/>
+  <text x="82" y="44" text-anchor="start" font-size="12" fill="#161b24">naive ORM</text>
+  <rect x="171" y="35" width="12" height="12" rx="2" fill="#1f7a5a"/>
+  <text x="189" y="44" text-anchor="start" font-size="12" fill="#161b24">Grackle</text>
+  <line x1="64" y1="308" x2="620" y2="308" stroke="#eceff3" stroke-width="1"/>
+  <text x="56" y="312" text-anchor="end" font-size="11" fill="#5b6472">0</text>
+  <line x1="64" y1="259" x2="620" y2="259" stroke="#eceff3" stroke-width="1"/>
+  <text x="56" y="263" text-anchor="end" font-size="11" fill="#5b6472">60</text>
+  <line x1="64" y1="210" x2="620" y2="210" stroke="#eceff3" stroke-width="1"/>
+  <text x="56" y="214" text-anchor="end" font-size="11" fill="#5b6472">120</text>
+  <line x1="64" y1="162" x2="620" y2="162" stroke="#eceff3" stroke-width="1"/>
+  <text x="56" y="166" text-anchor="end" font-size="11" fill="#5b6472">180</text>
+  <line x1="64" y1="113" x2="620" y2="113" stroke="#eceff3" stroke-width="1"/>
+  <text x="56" y="117" text-anchor="end" font-size="11" fill="#5b6472">240</text>
+  <line x1="64" y1="64" x2="620" y2="64" stroke="#eceff3" stroke-width="1"/>
+  <text x="56" y="68" text-anchor="end" font-size="11" fill="#5b6472">300</text>
+  <line x1="64" y1="308" x2="620" y2="308" stroke="#aab2bf" stroke-width="2"/>
+  <rect x="74" y="306" width="16" height="2" rx="2" fill="#d1495b"/>
+  <rect x="93" y="307" width="16" height="1" rx="2" fill="#1f7a5a"/>
+  <text x="92" y="328" text-anchor="middle" font-size="11" fill="#161b24">1</text>
+  <rect x="130" y="304" width="16" height="4" rx="2" fill="#d1495b"/>
+  <rect x="148" y="307" width="16" height="1" rx="2" fill="#1f7a5a"/>
+  <text x="147" y="328" text-anchor="middle" font-size="11" fill="#161b24">2</text>
+  <rect x="186" y="257" width="16" height="51" rx="2" fill="#d1495b"/>
+  <rect x="204" y="307" width="16" height="1" rx="2" fill="#1f7a5a"/>
+  <text x="203" y="328" text-anchor="middle" font-size="11" fill="#161b24">3</text>
+  <rect x="241" y="257" width="16" height="51" rx="2" fill="#d1495b"/>
+  <rect x="260" y="307" width="16" height="1" rx="2" fill="#1f7a5a"/>
+  <text x="259" y="328" text-anchor="middle" font-size="11" fill="#161b24">4</text>
+  <rect x="297" y="210" width="16" height="98" rx="2" fill="#d1495b"/>
+  <rect x="315" y="307" width="16" height="1" rx="2" fill="#1f7a5a"/>
+  <text x="314" y="328" text-anchor="middle" font-size="11" fill="#161b24">5</text>
+  <rect x="352" y="163" width="16" height="145" rx="2" fill="#d1495b"/>
+  <rect x="371" y="307" width="16" height="1" rx="2" fill="#1f7a5a"/>
+  <text x="370" y="328" text-anchor="middle" font-size="11" fill="#161b24">6</text>
+  <rect x="408" y="97" width="16" height="211" rx="2" fill="#d1495b"/>
+  <rect x="426" y="307" width="16" height="1" rx="2" fill="#1f7a5a"/>
+  <text x="425" y="328" text-anchor="middle" font-size="11" fill="#161b24">7</text>
+  <rect x="464" y="92" width="16" height="216" rx="2" fill="#d1495b"/>
+  <rect x="482" y="307" width="16" height="1" rx="2" fill="#1f7a5a"/>
+  <text x="481" y="328" text-anchor="middle" font-size="11" fill="#161b24">8</text>
+  <rect x="519" y="87" width="16" height="221" rx="2" fill="#d1495b"/>
+  <rect x="538" y="307" width="16" height="1" rx="2" fill="#1f7a5a"/>
+  <text x="537" y="328" text-anchor="middle" font-size="11" fill="#161b24">9</text>
+  <rect x="575" y="84" width="16" height="224" rx="2" fill="#d1495b"/>
+  <rect x="593" y="307" width="16" height="1" rx="2" fill="#1f7a5a"/>
+  <text x="592" y="328" text-anchor="middle" font-size="11" fill="#161b24">10</text>
+  <text x="342" y="352" text-anchor="middle" font-size="11" fill="#5b6472">join depth</text>
+</svg>

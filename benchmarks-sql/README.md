@@ -133,36 +133,23 @@ plus a per-shape `@EntityGraph`). Their statement counts make Grackle's single q
 concrete by contrast:
 
 <!-- CHART:statements-per-shape START -->
-```mermaid
-xychart-beta
-  title "SQL statements per query shape"
-  x-axis ["shallow-narrow", "deep-narrow", "deep-wide", "untuned"]
-  y-axis "statements issued" 0 --> 300
-  line [63, 271, 272, 260]
-  line [1, 1, 1, 261]
-  line [1, 1, 1, 1]
-```
+<img src="charts/statements-per-shape.svg" alt="SQL statements per query shape. naive ORM: 63, 271, 272, 260; eager ORM: 1, 1, 1, 261; Grackle: 1, 1, 1, 1.">
 <!-- CHART:statements-per-shape END -->
 
-Top line is the naive arm (63-272 statements, classic N+1). The middle line is the eager
-arm: 1 statement on the three shapes its entity graphs were tuned for, then collapsing to
-261 on `untuned`, the shape nobody tuned for. The flat bottom line is Grackle: **1
-statement for every shape**, tuned or not, by construction. The eager arm's good numbers
-are per-shape and have to be re-earned for each new query; in GraphQL, where the client
+The naive arm issues 63-272 statements per shape — classic N+1. The eager arm matches
+Grackle's single statement on the three shapes its entity graphs were tuned for, then
+collapses to 261 on `untuned`, the shape nobody tuned for. Grackle issues **1 statement
+for every shape**, tuned or not, by construction. The eager arm's good numbers are
+per-shape and have to be re-earned for each new query; in GraphQL, where the client
 chooses the shape, "the shape nobody tuned for" is the normal case.
 
-Grackle's own count is not just low but flat in depth — nesting another level onto the
-query never adds a statement:
+Grackle's count is not just low but flat in depth — nesting another level onto the query
+never adds a statement — while the naive arm's climbs with every level, the shape of N+1
+(the naive figures are a representative snapshot; their counts jitter a little run to run):
 
-<!-- CHART:grackle-statements-by-depth START -->
-```mermaid
-xychart-beta
-  title "Grackle SQL statements vs join depth"
-  x-axis [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-  y-axis "statements issued" 0 --> 5
-  line [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-```
-<!-- CHART:grackle-statements-by-depth END -->
+<!-- CHART:statements-by-depth START -->
+<img src="charts/statements-by-depth.svg" alt="SQL statements vs join depth. naive ORM: 2, 5, 63, 63, 121, 178, 260, 265, 272, 275; Grackle: 1, 1, 1, 1, 1, 1, 1, 1, 1, 1.">
+<!-- CHART:statements-by-depth END -->
 
 The `rows` column reports the total rows Grackle's SQL fetched at each depth, and in
 both datasets it is monotonic non-decreasing in `depth`, then flat once the chain
@@ -196,19 +183,12 @@ depth and then plateau once the chain reaches `SalesOrderDetail` at depth 7 — 
 statement count above never moves off 1:
 
 <!-- CHART:rows-by-depth START -->
-```mermaid
-xychart-beta
-  title "Rows fetched vs join depth (1 statement throughout)"
-  x-axis [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-  y-axis "rows fetched" 0 --> 65000
-  line [407, 19947, 19947, 19947, 19947, 29128, 61898, 61898, 61898, 61898]
-  line [96, 1929, 1929, 1929, 1929, 2603, 5677, 5677, 5677, 5677]
-```
+<img src="charts/rows-by-depth.svg" alt="Rows fetched vs join depth (1 statement throughout). unfiltered: 407, 19947, 19947, 19947, 19947, 29128, 61898, 61898, 61898, 61898; FR: 96, 1929, 1929, 1929, 1929, 2603, 5677, 5677, 5677, 5677.">
 <!-- CHART:rows-by-depth END -->
 
-Upper line is the unfiltered root (all country regions, 61,898 rows at the plateau);
-lower line is the single-region `FR` root (5,677), the same curve at roughly a
-tenth the scale. Both are fetched by one SQL statement at every depth.
+The unfiltered root (all country regions) reaches 61,898 rows at the plateau; the
+single-region `FR` root reaches 5,677, the same curve at roughly a tenth the scale. Both
+are fetched by one SQL statement at every depth.
 
 Query counts are fully deterministic: no JIT warmup, no GC, no scheduling noise, so a
 single run needs no repetition and is exactly reproducible. That determinism is what

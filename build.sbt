@@ -489,12 +489,12 @@ lazy val benchmarksSql = project
     // it is independent of the forked run's working directory. `check` exits non-zero on drift,
     // which fails the task (and CI).
     generateCharts := Def.taskDyn {
-      val readme = (baseDirectory.value / "README.md").getAbsolutePath
-      (Compile / runMain).toTask(s" grackle.benchmarks.sql.ChartGen generate $readme")
+      val base = baseDirectory.value.getAbsolutePath
+      (Compile / runMain).toTask(s" grackle.benchmarks.sql.ChartGen generate $base")
     }.value,
     checkCharts := Def.taskDyn {
-      val readme = (baseDirectory.value / "README.md").getAbsolutePath
-      (Compile / runMain).toTask(s" grackle.benchmarks.sql.ChartGen check $readme")
+      val base = baseDirectory.value.getAbsolutePath
+      (Compile / runMain).toTask(s" grackle.benchmarks.sql.ChartGen check $base")
     }.value
   )
 

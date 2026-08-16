@@ -93,6 +93,30 @@ object OrmQueryCounts extends IOApp.Simple {
       } finally factory.close()
     }
 
+  /**
+   * The naive arm's statement count at each of `depths`, using a narrow (one field per hop)
+   * shape so the axis is depth alone. This is the ORM counterpart to `SqlQueryCounts`' Grackle
+   * depth sweep: where Grackle holds at one statement, the lazy-loading arm's count climbs with
+   * nesting — the visible shape of N+1. Counts jitter run to run (see the class doc), so treat
+   * the results as a representative snapshot, not exact.
+   */
+  def countNaiveByDepth(depths: List[Int]): IO[List[Int]] =
+    IO.blocking {
+      val factory = OrmDb.emf(Map("hibernate.generate_statistics" -> "true"))
+      try {
+        val stats = statisticsOf(factory)
+        stats.setStatisticsEnabled(true)
+        depths.map { d =>
+          val shape = Shape(s"depth-$d", depth = d, wideFields = false, tuned = false)
+          stats.clear()
+          val em = factory.createEntityManager()
+          try NaiveOrmArm.run(em, shape, JoinChain.defaultRootCode)
+          finally em.close()
+          stats.getPrepareStatementCount.toInt
+        }
+      } finally factory.close()
+    }
+
   def countGrackle: IO[List[ArmCount]] =
     DoobieMonitor.statsMonitor[IO].flatMap { monitor =>
       val mapping = AdventureWorksMapping.mkMapping[IO](BenchmarkDb.transactor[IO], monitor)

@@ -104,4 +104,20 @@ class OrmQueryCountsSuite extends CatsEffectSuite {
       }
     }
   }
+
+  test("naive per-depth statement counts track charts/chart-data.json") {
+    val chart = ChartData.load
+    val tolerance = 30
+    OrmQueryCounts.countNaiveByDepth(chart.naiveStatementsByDepth.depths).map { measured =>
+      measured
+        .zip(chart.naiveStatementsByDepth.statements)
+        .zip(chart.naiveStatementsByDepth.depths)
+        .foreach {
+          case ((m, expected), d) =>
+            assert(
+              Math.abs(m - expected) <= tolerance,
+              s"depth $d: naive count $m is more than $tolerance off chart-data.json's $expected")
+        }
+    }
+  }
 }

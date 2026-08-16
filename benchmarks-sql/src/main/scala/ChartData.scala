@@ -20,18 +20,19 @@ import scala.io.Source
 import io.circe.Decoder
 
 /**
- * The single source of truth for the mermaid charts in `benchmarks-sql/README.md`, loaded from the
- * `charts/chart-data.json` classpath resource. `ChartGen` renders these numbers into the README's
- * marker-delimited chart blocks, and `SqlQueryCountsSuite` / `OrmQueryCountsSuite` assert that the
- * counts measured against the live database equal the values here — so the committed data cannot
- * silently drift from either the charts or reality.
+ * The single source of truth for the charts in `benchmarks-sql/README.md`, loaded from the
+ * `charts/chart-data.json` classpath resource. `ChartGen` renders these numbers into the
+ * committed `charts/<id>.svg` files, and `SqlQueryCountsSuite` / `OrmQueryCountsSuite` assert
+ * that the counts measured against the live database equal the values here — so the committed
+ * data cannot silently drift from either the charts or reality.
  *
- * Read via the classpath rather than a file path so it resolves identically from the generator, the
- * `checkCharts` task, and the forked test JVMs, none of which share a working directory.
+ * Read via the classpath rather than a file path so it resolves identically from the generator,
+ * the `checkCharts` task, and the forked test JVMs, none of which share a working directory.
  */
 final case class ChartData(
     statementsPerShape: StatementsPerShape,
     grackleStatementsByDepth: SeriesByDepth,
+    naiveStatementsByDepth: SeriesByDepth,
     rowsByDepth: RowsByDepth)
 
 final case class StatementsPerShape(
@@ -57,8 +58,11 @@ object ChartData {
     Decoder.forProduct3("depths", "unfiltered", "filtered")(RowsByDepth.apply)
 
   implicit val chartDataDecoder: Decoder[ChartData] =
-    Decoder.forProduct3("statementsPerShape", "grackleStatementsByDepth", "rowsByDepth")(
-      ChartData.apply)
+    Decoder.forProduct4(
+      "statementsPerShape",
+      "grackleStatementsByDepth",
+      "naiveStatementsByDepth",
+      "rowsByDepth")(ChartData.apply)
 
   def load: ChartData = {
     val stream = Option(getClass.getResourceAsStream(resourcePath))
