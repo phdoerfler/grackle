@@ -80,7 +80,7 @@ object ChartData {
  * not validated against the database, so they must not sit in the file whose invariant is that
  * every number is DB-checked. See `chart-data-timing.json` for the caveats.
  */
-final case class TimingData(untunedMsVsRtt: UntunedMsVsRtt)
+final case class TimingData(untunedMsVsRtt: UntunedMsVsRtt, overfetchCost: OverfetchCost)
 
 final case class UntunedMsVsRtt(
     latencyMs: List[Int],
@@ -88,14 +88,19 @@ final case class UntunedMsVsRtt(
     eager: List[Int],
     naive: List[Int])
 
+final case class OverfetchCost(conditions: List[String], grackle: List[Int], eager: List[Int])
+
 object TimingData {
   val resourcePath = "/charts/chart-data-timing.json"
 
   implicit val untunedMsVsRttDecoder: Decoder[UntunedMsVsRtt] =
     Decoder.forProduct4("latencyMs", "grackle", "eager", "naive")(UntunedMsVsRtt.apply)
 
+  implicit val overfetchCostDecoder: Decoder[OverfetchCost] =
+    Decoder.forProduct3("conditions", "grackle", "eager")(OverfetchCost.apply)
+
   implicit val timingDataDecoder: Decoder[TimingData] =
-    Decoder.forProduct1("untunedMsVsRtt")(TimingData.apply)
+    Decoder.forProduct2("untunedMsVsRtt", "overfetchCost")(TimingData.apply)
 
   def load: TimingData = {
     val stream = Option(getClass.getResourceAsStream(resourcePath))

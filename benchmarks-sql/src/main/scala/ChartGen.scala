@@ -273,11 +273,30 @@ object ChartGen {
   }
 
   /**
+   * The indicative over-fetch chart: the same deep-narrow query through Grackle vs the eager
+   * ORM under conditions that isolate each over-fetch cost. Value-labelled because Grackle's
+   * bars are slivers next to the ORM's under bandwidth throttling.
+   */
+  def overfetchChart(t: TimingData): BarChart = {
+    val o = t.overfetchCost
+    BarChart(
+      id = "overfetch-cost",
+      title = "Over-fetch cost: ms/op by condition (indicative)",
+      categories = o.conditions,
+      series = List(
+        Series("eager ORM", Palette.eager, o.eager),
+        Series("Grackle", Palette.grackle, o.grackle)),
+      yMax = axisMax((o.eager ++ o.grackle).max),
+      valueLabels = true
+    )
+  }
+
+  /**
    * Every chart rendered into the README, in order: the deterministic set plus the timing
-   * chart.
+   * charts.
    */
   def allCharts(data: ChartData, timing: TimingData): List[BarChart] =
-    charts(data) :+ timingChart(timing)
+    charts(data) ++ List(timingChart(timing), overfetchChart(timing))
 
   /**
    * Applies every chart's `<img>` tag to `doc`, leaving all other content untouched.

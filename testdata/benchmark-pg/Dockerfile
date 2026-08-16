@@ -38,4 +38,8 @@ RUN cd /data && \
 COPY install.sh /docker-entrypoint-initdb.d/10-install.sh
 RUN dos2unix /docker-entrypoint-initdb.d/10-install.sh && chmod +x /docker-entrypoint-initdb.d/10-install.sh
 
+# Runs after 10-install.sh (sorted order) so the AdventureWorks tables it references already exist.
+COPY 20-heavy-column.sql /docker-entrypoint-initdb.d/20-heavy-column.sql
+RUN dos2unix /docker-entrypoint-initdb.d/20-heavy-column.sql
+
 WORKDIR /data/

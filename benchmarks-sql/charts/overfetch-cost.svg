@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif">
+  <rect x="0" y="0" width="640" height="360" rx="2" fill="#ffffff" stroke="#e2e6ec"/>
+  <text x="64" y="26" text-anchor="start" font-size="15" fill="#161b24" font-weight="600">Over-fetch cost: ms/op by condition (indicative)</text>
+  <rect x="64" y="35" width="12" height="12" rx="2" fill="#e0a458"/>
+  <text x="82" y="44" text-anchor="start" font-size="12" fill="#161b24">eager ORM</text>
+  <rect x="171" y="35" width="12" height="12" rx="2" fill="#1f7a5a"/>
+  <text x="189" y="44" text-anchor="start" font-size="12" fill="#161b24">Grackle</text>
+  <line x1="64" y1="308" x2="620" y2="308" stroke="#eceff3" stroke-width="1"/>
+  <text x="56" y="312" text-anchor="end" font-size="11" fill="#5b6472">0</text>
+  <line x1="64" y1="259" x2="620" y2="259" stroke="#eceff3" stroke-width="1"/>
+  <text x="56" y="263" text-anchor="end" font-size="11" fill="#5b6472">1400</text>
+  <line x1="64" y1="210" x2="620" y2="210" stroke="#eceff3" stroke-width="1"/>
+  <text x="56" y="214" text-anchor="end" font-size="11" fill="#5b6472">2800</text>
+  <line x1="64" y1="162" x2="620" y2="162" stroke="#eceff3" stroke-width="1"/>
+  <text x="56" y="166" text-anchor="end" font-size="11" fill="#5b6472">4200</text>
+  <line x1="64" y1="113" x2="620" y2="113" stroke="#eceff3" stroke-width="1"/>
+  <text x="56" y="117" text-anchor="end" font-size="11" fill="#5b6472">5600</text>
+  <line x1="64" y1="64" x2="620" y2="64" stroke="#eceff3" stroke-width="1"/>
+  <text x="56" y="68" text-anchor="end" font-size="11" fill="#5b6472">7000</text>
+  <line x1="64" y1="308" x2="620" y2="308" stroke="#aab2bf" stroke-width="2"/>
+  <rect x="97" y="292" width="59" height="16" rx="2" fill="#e0a458"/>
+  <text x="126" y="288" text-anchor="middle" font-size="10" fill="#161b24" font-weight="600">458</text>
+  <rect x="158" y="305" width="59" height="3" rx="2" fill="#1f7a5a"/>
+  <text x="187" y="301" text-anchor="middle" font-size="10" fill="#161b24" font-weight="600">96</text>
+  <text x="157" y="328" text-anchor="middle" font-size="11" fill="#161b24">compute, full BW</text>
+  <rect x="282" y="67" width="59" height="241" rx="2" fill="#e0a458"/>
+  <text x="311" y="63" text-anchor="middle" font-size="10" fill="#161b24" font-weight="600">6907</text>
+  <rect x="343" y="296" width="59" height="12" rx="2" fill="#1f7a5a"/>
+  <text x="372" y="292" text-anchor="middle" font-size="10" fill="#161b24" font-weight="600">332</text>
+  <text x="342" y="328" text-anchor="middle" font-size="11" fill="#161b24">bandwidth 2MB/s</text>
+  <rect x="467" y="66" width="59" height="242" rx="2" fill="#e0a458"/>
+  <text x="496" y="62" text-anchor="middle" font-size="10" fill="#161b24" font-weight="600">6937</text>
+  <rect x="528" y="293" width="59" height="15" rx="2" fill="#1f7a5a"/>
+  <text x="557" y="289" text-anchor="middle" font-size="10" fill="#161b24" font-weight="600">439</text>
+  <text x="527" y="328" text-anchor="middle" font-size="11" fill="#161b24">finale 50ms+2MB/s</text>
+</svg>

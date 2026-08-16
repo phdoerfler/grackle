@@ -44,6 +44,7 @@ object Toxiproxy {
 
   private val upstreamToxicName = "latency_upstream"
   private val downstreamToxicName = "latency_downstream"
+  private val bandwidthToxicName = "bandwidth_downstream"
 
   /**
    * Overridable so a single system property can retarget every caller if the Toxiproxy admin
@@ -58,7 +59,8 @@ object Toxiproxy {
       toxicType: String,
       stream: String,
       latencyMs: Int,
-      jitterMs: Int
+      jitterMs: Int,
+      rateKBps: Int
   )
 
   // The admin API is local and answers in single-digit milliseconds, so 5s is already pathological
@@ -130,18 +132,18 @@ object Toxiproxy {
                   s"toxic is missing a String `$field`: $body",
                   err),
               identity)
-        def attr(field: String): Int =
-          toxic
-            .hcursor
-            .downField("attributes")
-            .get[Int](field)
-            .fold(
-              err =>
-                throw new IllegalStateException(
-                  s"toxic is missing an Int `attributes.$field`: $body",
-                  err),
-              identity)
-        Toxic(str("name"), str("type"), str("stream"), attr("latency"), attr("jitter"))
+        // Read attributes as optional (default 0): a `latency` toxic has `latency`/`jitter` but a
+        // `bandwidth` toxic has `rate` instead, and this one parser must tolerate either so the
+        // two can coexist (the combined latency+bandwidth condition used by the over-fetch finale).
+        def attrOpt(field: String): Int =
+          toxic.hcursor.downField("attributes").get[Int](field).getOrElse(0)
+        Toxic(
+          str("name"),
+          str("type"),
+          str("stream"),
+          attrOpt("latency"),
+          attrOpt("jitter"),
+          attrOpt("rate"))
       }
   }
 
@@ -169,22 +171,56 @@ object Toxiproxy {
    * Jitter is fixed at 0. Deterministic latency keeps run-to-run comparison clean, and this
    * suite has been bitten repeatedly by noise swamping real effects.
    */
-  def setLatency(totalRttMs: Int): Unit = {
+  def setLatency(totalRttMs: Int): Unit = setConditions(totalRttMs, 0)
+
+  /**
+   * Installs a downstream `bandwidth` toxic capping server→client throughput at
+   * `downstreamKBps` (KB/s), replacing any toxics present. `0` just clears. Downstream because
+   * over-fetching's cost is in the *result* bytes flowing back from Postgres, not the request
+   * going out.
+   */
+  def setBandwidth(downstreamKBps: Int): Unit = setConditions(0, downstreamKBps)
+
+  /**
+   * Installs latency (a directional pair) and/or a downstream bandwidth cap together, replacing
+   * any toxics present. Either argument may be 0 to omit that toxic; both 0 clears. The
+   * combination is what the over-fetch finale needs: realistic round-trip time and a throttled
+   * pipe at once, so extra statements and extra bytes are both taxed in the same run.
+   */
+  def setConditions(totalRttMs: Int, downstreamKBps: Int): Unit = {
     require(totalRttMs >= 0, s"latency must not be negative, got $totalRttMs")
+    require(downstreamKBps >= 0, s"bandwidth must not be negative, got $downstreamKBps")
     clearToxics()
     if (totalRttMs > 0) {
       addLatencyToxic(upstreamToxicName, "upstream", totalRttMs / 2)
       addLatencyToxic(downstreamToxicName, "downstream", totalRttMs - totalRttMs / 2)
     }
+    if (downstreamKBps > 0)
+      addBandwidthToxic(bandwidthToxicName, "downstream", downstreamKBps)
     // Read back what actually landed rather than trusting the POSTs' 2xx statuses: a trial that
-    // silently ran under the wrong RTT (e.g. Toxiproxy accepting a toxic it then clamps or
-    // rejects internally) would produce a plausible-looking but meaningless number, with nothing
-    // in the JMH output to flag it.
-    val actualRttMs = listToxics().map(_.latencyMs).sum
+    // silently ran under the wrong conditions (e.g. Toxiproxy accepting a toxic it then clamps or
+    // rejects internally) would produce a plausible-looking but meaningless number.
+    val installed = listToxics()
+    val actualRttMs = installed.map(_.latencyMs).sum
+    val actualKBps = installed.filter(_.toxicType == "bandwidth").map(_.rateKBps).sum
     if (actualRttMs != totalRttMs)
       throw new IllegalStateException(
-        s"requested a total latency of ${totalRttMs}ms but the toxics installed on the proxy " +
-          s"now sum to ${actualRttMs}ms")
+        s"requested a total latency of ${totalRttMs}ms but the installed toxics sum to ${actualRttMs}ms")
+    if (actualKBps != downstreamKBps)
+      throw new IllegalStateException(
+        s"requested a downstream bandwidth of ${downstreamKBps}KB/s but the installed toxics " +
+          s"report ${actualKBps}KB/s")
+  }
+
+  private def addBandwidthToxic(name: String, stream: String, rateKBps: Int): Unit = {
+    val body = Json.obj(
+      "name" -> Json.fromString(name),
+      "type" -> Json.fromString("bandwidth"),
+      "stream" -> Json.fromString(stream),
+      "toxicity" -> Json.fromDoubleOrNull(1.0),
+      "attributes" -> Json.obj("rate" -> Json.fromInt(rateKBps))
+    )
+    val _ = send(request("POST", toxicsPath, Some(body)), Set(200, 201))
   }
 
   private def addLatencyToxic(name: String, stream: String, latencyMs: Int): Unit = {

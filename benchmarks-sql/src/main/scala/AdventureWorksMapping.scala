@@ -53,10 +53,15 @@ trait AdventureWorksSchema[F[_]] extends DoobiePgMapping[F] {
     val addressTypeId = col("addresstypeid", Meta[Int])
   }
 
-  object person extends TableDef("person.person") {
+  // Mapped to the `person.person_heavy` view (not the base table) so the deliberately expensive
+  // `heavy` computed column is available. Grackle selects it only when a query asks for it; see
+  // `testdata/benchmark-pg/20-heavy-column.sql`.
+  object person extends TableDef("person.person_heavy") {
     val businessEntityId = col("businessentityid", Meta[Int])
     val firstName = col("firstname", Meta[String])
     val lastName = col("lastname", Meta[String])
+    val heavy = col("heavy", Meta[Int])
+    val wide = col("wide", Meta[String])
   }
 
   object customer extends TableDef("sales.customer") {
@@ -124,6 +129,8 @@ trait AdventureWorksMapping[F[_]] extends AdventureWorksSchema[F] {
       type Person {
         firstName: String!
         lastName: String!
+        heavy: Int!
+        wide: String!
         customers: [Customer!]!
       }
       type Customer {
@@ -201,6 +208,8 @@ trait AdventureWorksMapping[F[_]] extends AdventureWorksSchema[F] {
         SqlField("businessEntityId", person.businessEntityId, key = true, hidden = true),
         SqlField("firstName", person.firstName),
         SqlField("lastName", person.lastName),
+        SqlField("heavy", person.heavy),
+        SqlField("wide", person.wide),
         SqlObject("customers", Join(person.businessEntityId, customer.personId))
       ),
       ObjectMapping(CustomerType)(
