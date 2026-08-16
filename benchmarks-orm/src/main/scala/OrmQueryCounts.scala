@@ -76,17 +76,14 @@ object OrmQueryCounts extends IOApp.Simple {
           val em = factory.createEntityManager()
           try runArm(em, shape, JoinChain.defaultRootCode)
           finally em.close()
-          // NOT a non-emptiness check on `runArm`'s returned document: the document can
-          // legitimately come back as an empty `{"data":{"countryRegions":[]}}` even when the
-          // root is found and real SQL work happened — pruning (`NaiveOrmArm.descend`) drops the
-          // root entirely if no row survives the schema's non-null-hop requirements
-          // (`Selection.nonNullToOneHops`), which has nothing to do with whether the shape's
-          // depth reaches `"category"` (`shallowNarrow` depth 3 and `untuned` depth 7 both stop
-          // short of the full 10-hop chain regardless). That's a legitimate outcome for every
-          // arm, not a failure mode, so an emptiness check on the document would be unreliable —
-          // it could reject a shape that did real work and correctly found nothing. What this
-          // guard actually needs to catch is a shape that did no SQL work at all, which the
-          // statement count (the metric under test) answers directly.
+          // NOT a check on the shape or size of `runArm`'s returned document: the document's
+          // richness is no proxy for how much SQL ran. A found root always assembles a populated
+          // `countryRegions` entry, and a childless branch renders as a legitimate `[]` or `null`
+          // rather than vanishing (mirroring Grackle's LEFT JOINs, see `NaiveOrmArm` and #888),
+          // so a shallow shape and a deep one both come back looking "full" while issuing wildly
+          // different statement counts. What this guard actually needs to catch is a shape that
+          // did no SQL work at all, which the statement count (the metric under test) answers
+          // directly.
           val statements = stats.getPrepareStatementCount.toInt
           require(
             statements > 0,

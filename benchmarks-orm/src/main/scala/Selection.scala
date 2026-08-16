@@ -59,17 +59,6 @@ object Selection {
     )
 
   /**
-   * The chain's only non-null to-one hops — `product: Product!` and
-   * `category: ProductCategory!` in `AdventureWorksMapping`'s schema. Grackle emits an INNER
-   * JOIN for each, so a row that never reaches one is eliminated from the result set entirely,
-   * and with it any ancestor that has no other surviving path. `NaiveOrmArm.descend` reads this
-   * set to prune the same rows out of its own traversal so the two arms assemble the same
-   * document. This must be kept in sync with the SDL by hand — the two are not otherwise
-   * connected.
-   */
-  val nonNullToOneHops: Set[String] = Set("product", "category")
-
-  /**
    * The hops this shape traverses, in order.
    */
   def hopsFor(shape: Shape): List[String] = JoinChain.hops.take(shape.depth)

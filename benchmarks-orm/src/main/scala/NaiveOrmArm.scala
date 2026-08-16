@@ -58,12 +58,6 @@ object NaiveOrmArm {
       shape: Shape): Option[Json] = {
     val terminalHop = Selection.hopsFor(shape).last
 
-    // Mirroring `Selection.nonNullToOneHops` here is what makes the two arms assemble the same
-    // document, and it is also plain GraphQL semantics: a null in a non-null field propagates
-    // upward and nulls its parent.
-    def requiredBelow(rest: List[String]): Boolean =
-      rest.exists(Selection.nonNullToOneHops)
-
     def walk(entity: AnyRef, hop: String, hops: List[String]): Option[Json] = {
       def scalars: List[(String, Json)] = OrmJson.scalarsFor(
         entity = entity,
@@ -83,9 +77,10 @@ object NaiveOrmArm {
                 // `businessEntityAddress.businessEntityId` isn't always a Person: AdventureWorks'
                 // shared BusinessEntity id space also covers Store/Vendor rows (confirmed live:
                 // 816 of 19614 rows have no matching person). `person: Person` is nullable, so
-                // Grackle LEFT JOINs it and emits `"person": null` — unless a non-null to-one lies
-                // further down, in which case the null-padded row is eliminated by that INNER JOIN
-                // and the whole branch disappears instead. `jsonNullable` encodes exactly that.
+                // Grackle LEFT JOINs it and emits `"person": null`. Since #888 a non-null to-one
+                // lying further down no longer eliminates that null-padded row — the subordinate
+                // INNER JOIN can't drop a row its parent LEFT JOIN chose to keep. `jsonNullable`
+                // encodes exactly that.
                 jsonNullable(Option(b.person), next, rest)
               case p: PersonEntity if next == "customers" =>
                 jsonArr(p.customers.asScala.toList, next, rest)
@@ -112,21 +107,20 @@ object NaiveOrmArm {
       }
     }
 
-    // A to-many hop. Dead children are dropped. An empty result kills this node too, but only
-    // when a non-null to-one lies below it — otherwise an empty collection is a legitimate `[]`
-    // that Grackle also emits.
+    // A to-many hop, assembled by Grackle with a LEFT JOIN: dead children are dropped, but an empty
+    // result is a legitimate `[]`, never a reason to eliminate this node. Since #888 (a non-null
+    // field under a nullable parent no longer drops the null-padded row), a non-null to-one lying
+    // below no longer eliminates a childless collection either.
     def jsonArr(entities: List[AnyRef], hop: String, rest: List[String]): Option[Json] = {
       val kids = entities.flatMap(e => walk(e, hop, rest))
-      if (kids.isEmpty && requiredBelow(rest)) None else Some(Json.arr(kids: _*))
+      Some(Json.arr(kids: _*))
     }
 
-    // A nullable to-one hop: absent or dead becomes `null`, unless a non-null to-one lies below,
-    // in which case the row is eliminated and the branch dies instead.
+    // A nullable to-one hop, assembled by Grackle with a LEFT JOIN: absent or dead becomes `null`.
+    // A non-null to-one lying below does not eliminate the row (see #888) — its own INNER JOIN is
+    // subordinate to this LEFT JOIN, so the null-padded parent survives with `null` here.
     def jsonNullable(entity: Option[AnyRef], hop: String, rest: List[String]): Option[Json] =
-      entity.flatMap(e => walk(e, hop, rest)) match {
-        case some @ Some(_) => some
-        case None => if (requiredBelow(rest)) None else Some(Json.Null)
-      }
+      entity.flatMap(e => walk(e, hop, rest)).orElse(Some(Json.Null))
 
     // A non-null to-one hop: no row can exist without it, so absent or dead kills the branch.
     def jsonRequired(entity: Option[AnyRef], hop: String, rest: List[String]): Option[Json] =
