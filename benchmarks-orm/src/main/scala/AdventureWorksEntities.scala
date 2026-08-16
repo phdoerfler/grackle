@@ -146,14 +146,36 @@ class BusinessEntityAddressEntity {
   var person: PersonEntity = _
 }
 
-// Mapped to the `person.person_heavy` view (not the base table) so the `heavy` column exists.
-// Hibernate selects every mapped scalar of an entity when it loads a row, so `heavy` — and its
-// expensive `heavy_fn` evaluation — is fetched on every Person load whether or not anyone reads
-// it: the ORM cannot express "fetch these columns" the way Grackle's projection does. See
-// `testdata/benchmark-pg/20-heavy-column.sql`.
+@Entity
+@Table(name = "person", schema = "person")
+class PersonEntity {
+  @Id
+  @Column(name = "businessentityid")
+  var businessEntityId: Integer = _
+
+  @Column(name = "firstname")
+  var firstName: String = _
+
+  @Column(name = "lastname")
+  var lastName: String = _
+
+  @OneToMany(mappedBy = "person", fetch = FetchType.LAZY)
+  @BatchSize(size = 32)
+  var customers: ju.Set[CustomerEntity] = _
+}
+
+/**
+ * A flat Person mapped to the `person.person_heavy` view, carrying the deliberately expensive
+ * `heavy` and byte-wide `wide` columns. Kept SEPARATE from `PersonEntity` on purpose: Hibernate
+ * selects every mapped scalar when it loads an entity, so if the chain's `PersonEntity` carried
+ * these columns, every ORM benchmark that reaches Person — including the latency sweep — would
+ * pay for them, conflating over-fetch cost with round-trip cost. Only `OverfetchTiming` uses
+ * this entity, so the over-fetch cost stays confined to the over-fetch demo. See
+ * `testdata/benchmark-pg/20-heavy-column.sql`.
+ */
 @Entity
 @Table(name = "person_heavy", schema = "person")
-class PersonEntity {
+class PersonHeavyEntity {
   @Id
   @Column(name = "businessentityid")
   var businessEntityId: Integer = _
@@ -169,10 +191,6 @@ class PersonEntity {
 
   @Column(name = "wide")
   var wide: String = _
-
-  @OneToMany(mappedBy = "person", fetch = FetchType.LAZY)
-  @BatchSize(size = 32)
-  var customers: ju.Set[CustomerEntity] = _
 }
 
 @Entity

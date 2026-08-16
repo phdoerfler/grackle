@@ -18,25 +18,27 @@ package grackle.benchmarks.orm
 import cats.effect.{IO, IOApp}
 import cats.implicits._
 
-import grackle.benchmarks.sql.{AdventureWorksMapping, BenchmarkDb, JoinChain, Toxiproxy}
+import grackle.benchmarks.sql.{AdventureWorksMapping, BenchmarkDb, Toxiproxy}
 
 /**
- * Indicative timing for the over-fetch effect: the same query (which requests NEITHER the `heavy`
- * nor the `wide` column) run through Grackle and the tuned eager ORM arm, under conditions that
- * isolate each cost — full bandwidth to expose `heavy`'s compute, throttled bandwidth to expose
- * `wide`'s bytes, latency for round trips, and everything at once for the finale.
+ * Indicative timing for the over-fetch effect: the same set of Person rows fetched by Grackle,
+ * which projects only the requested `firstName`, and by the ORM, whose whole-entity fetch of
+ * `PersonHeavyEntity` also selects the deliberately expensive `heavy` and byte-wide `wide`
+ * columns that nobody asked for. The two arms fetch the identical rows through the
+ * `person.person_heavy` view, so the only difference is which columns leave the database.
+ *
+ * Deliberately NOT routed through the deep chain: `PersonHeavyEntity` and the `people` root
+ * exist only here, so the expensive columns never touch the latency/statement benchmarks (which
+ * would otherwise conflate over-fetch cost with round-trip cost).
  *
  * Uses a POOLED transactor for Grackle (as the JMH benchmark does), so a reused connection pays
- * only each request's round trips, not a fresh TCP+auth handshake per query — otherwise the
- * unpooled transactor makes Grackle look absurdly latency-sensitive.
- *
- * NOT a JMH benchmark and NOT validated — quick medians for the illustrative charts only.
+ * only each request's round trips, not a fresh TCP+auth handshake per query. NOT a JMH
+ * benchmark and NOT validated — quick medians for the illustrative chart only.
  */
 object OverfetchTiming extends IOApp.Simple {
 
-  private val shape = OrmQueryShapes.deepNarrow // reaches Person; requests neither heavy nor wide
-  private val warmup = 3
-  private val samples = 7
+  private val warmup = 2
+  private val samples = 5
 
   private def median(xs: List[Long]): Long = xs.sorted.apply(xs.length / 2)
 
@@ -54,11 +56,16 @@ object OverfetchTiming extends IOApp.Simple {
     BenchmarkDb.transactorResource[IO].use { xa =>
       val mapping = AdventureWorksMapping.mkMapping[IO](xa)
       val factory = OrmDb.emf()
-      val grackle = mapping.compileAndRun(GrackleShapeQuery.queryFor(shape)).void
+      // Grackle projects exactly `firstName`; the ORM loads the whole entity, `heavy`/`wide` and all.
+      val grackle = mapping.compileAndRun("query { people { firstName } }").void
       val eager = IO.blocking {
         val em = factory.createEntityManager()
-        try { val _ = EagerOrmArm.run(em, shape, JoinChain.defaultRootCode); () }
-        finally em.close()
+        try {
+          val _ = em
+            .createQuery("select p from PersonHeavyEntity p", classOf[PersonHeavyEntity])
+            .getResultList()
+          ()
+        } finally em.close()
       }
 
       def under(label: String, rttMs: Int, kbps: Int): IO[Unit] =
@@ -74,9 +81,8 @@ object OverfetchTiming extends IOApp.Simple {
         _ <- grackle // prime both connection pools before any condition
         _ <- eager
         _ <- under("compute", 0, 0)
-        _ <- under("bandwidth-2MBps", 0, 2000)
-        _ <- under("latency-50", 50, 0)
-        _ <- under("finale-50+2MBps", 50, 2000)
+        _ <- under("bandwidth", 0, 8000)
+        _ <- under("finale", 50, 8000)
         _ <- IO.blocking(Toxiproxy.clearToxics())
         _ <- IO.blocking(factory.close())
       } yield ()

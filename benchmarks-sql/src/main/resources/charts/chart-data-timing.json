@@ -1,5 +1,5 @@
 {
-  "_comment": "INDICATIVE timing — NOT test-validated and NOT reproducible, unlike chart-data.json. Two snapshots: `untunedMsVsRtt` is mean ms/op for the untuned shape vs injected RTT (quick OrmVsGrackleBenchmark run); `overfetchCost` is median ms/op for deep-narrow (which requests neither the heavy nor the wide column) through Grackle vs the eager ORM under conditions that isolate compute, bandwidth, and both (grackle.benchmarks.orm.OverfetchTiming). Wide confidence intervals; treat as the shape of the gap, not authoritative figures. Regenerate charts with `sbt benchmarksSql/generateCharts`.",
+  "_comment": "INDICATIVE timing — NOT test-validated and NOT reproducible, unlike chart-data.json. Two snapshots: `untunedMsVsRtt` is mean ms/op for the untuned shape vs injected RTT (quick OrmVsGrackleBenchmark run); `overfetchCost` is median ms/op for fetching all Person rows through the `people` root — Grackle projecting only `firstName`, the ORM loading the whole `PersonHeavyEntity` including the expensive `heavy` and byte-wide `wide` columns — under conditions that isolate compute, bandwidth, and both (grackle.benchmarks.orm.OverfetchTiming). Wide confidence intervals; treat as the shape of the gap, not authoritative figures. Regenerate charts with `sbt benchmarksSql/generateCharts`.",
   "untunedMsVsRtt": {
     "latencyMs": [0, 20, 50],
     "grackle": [112, 145, 204],
@@ -7,8 +7,8 @@
     "naive": [1302, 6644, 14529]
   },
   "overfetchCost": {
-    "conditions": ["compute, full BW", "bandwidth 2MB/s", "finale 50ms+2MB/s"],
-    "grackle": [96, 332, 439],
-    "eager": [458, 6907, 6937]
+    "conditions": ["compute, full BW", "bandwidth 8MB/s", "finale 50ms+8MB/s"],
+    "grackle": [203, 124, 222],
+    "eager": [5933, 7028, 7730]
   }
 }

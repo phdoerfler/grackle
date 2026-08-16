@@ -337,18 +337,18 @@ change how many statements are issued, only what each one costs.
 Statement count is one axis; the *width* of each statement is another. An ORM materializes
 whole **entities** — every mapped column of every row it loads — because the object needs all
 its fields. Grackle compiles the GraphQL selection set directly into the SQL projection, so a
-column is fetched only if the query asks for it or it is needed as a join key. On the same
+column is fetched only if the query asks for it or it is needed as a join key. On the
 `deep-narrow` shape (which projects just `countryRegionCode` and one terminal `category.name`),
-Grackle's SQL selects **12 columns**; the tuned eager arm's selects **34** — every scalar of
+Grackle's SQL selects **12 columns**; the tuned eager arm's selects **32** — every scalar of
 every entity in the chain, including `firstName`, `lastName`, `city`, `territoryId`, `totalDue`
 and the rest that nobody requested. Both fetch it in one statement, so this cost is invisible in
 the query counts above.
 
 Reducing columns is really reducing **work per row**, which has two flavours — bytes on the wire
-and compute to produce the value. To make each measurable on a database that otherwise fits
-entirely in RAM, `testdata/benchmark-pg/20-heavy-column.sql` adds two columns to a
-`person.person_heavy` view that both the Grackle and the ORM mapping read as ordinary columns
-(no Hibernate `@Formula` — Grackle has no equivalent, so that would be an unfair comparison):
+and compute to produce the value. On this benchmark's real columns (all small, on a LAN) neither
+is measurable, so `testdata/benchmark-pg/20-heavy-column.sql` adds two exaggerated columns to a
+`person.person_heavy` view, read as ordinary columns by both mappings (a view, not a Hibernate
+`@Formula` — Grackle has no equivalent, so that would be an unfair comparison):
 
 - `heavy` — an `IMMUTABLE` function that is expensive to **compute** (tiny result). PostgreSQL
   evaluates it only for statements that actually project it (verified with `EXPLAIN`: it is
@@ -356,20 +356,24 @@ entirely in RAM, `testdata/benchmark-pg/20-heavy-column.sql` adds two columns to
   fetch runs it once per row.
 - `wide` — ~2KB of text per row: cheap to compute, but **bytes** on the wire.
 
-`grackle.benchmarks.orm.OverfetchTiming` then runs the same `deep-narrow` query — which requests
-neither column — through both arms under conditions that isolate each cost:
+These columns are reached only through a dedicated `people` root (Grackle) and `PersonHeavyEntity`
+(Hibernate); they are deliberately kept off the join chain so the statement and latency benchmarks
+above never touch them — otherwise every ORM fetch that reached Person would pay for `heavy` and
+conflate over-fetch cost with round-trip cost. `grackle.benchmarks.orm.OverfetchTiming` fetches
+every Person row through that root — Grackle projecting only `firstName`, the ORM loading the whole
+entity — under conditions that isolate each cost:
 
 <!-- CHART:overfetch-cost START -->
-<img src="charts/overfetch-cost.svg" alt="Over-fetch cost: ms/op by condition (indicative). eager ORM: 458, 6907, 6937; Grackle: 96, 332, 439.">
+<img src="charts/overfetch-cost.svg" alt="Over-fetch cost: ms/op by condition (indicative). eager ORM: 5933, 7028, 7730; Grackle: 203, 124, 222.">
 <!-- CHART:overfetch-cost END -->
 
-- **Compute** (full bandwidth): the ORM over-fetches `heavy` and pays `heavy_fn` per row —
-  ~458ms against Grackle's ~96ms, a cost that is pure CPU and so survives a fully cached database.
-- **Bandwidth** (throttled to 2 MB/s): the ORM over-fetches `wide` — ~6.9s against Grackle's
-  ~0.3s. The join fan-out makes this worse than the column size suggests: Person's 2KB `wide`
-  value is repeated across every descendant row in the flattened result (~5,677 of them, ~11 MB),
-  so over-fetching a wide column *high* in the chain is punished hardest.
-- **Finale** (50 ms RTT *and* 2 MB/s): everything at once — ~6.9s against Grackle's ~0.4s.
+- **Compute** (full bandwidth): the ORM over-fetches `heavy` and pays `heavy_fn` per row, plus the
+  materialization of ~20k full entities — ~5.9s against Grackle's ~0.2s. Pure CPU, so it survives a
+  fully cached database.
+- **Bandwidth** (throttled to 8 MB/s): the ORM also over-fetches `wide`'s bytes — ~7.0s against
+  Grackle's ~0.1s. (A *nested* query would be worse still: a wide column high in the chain is
+  repeated across every descendant row in the flattened result.)
+- **Finale** (50 ms RTT *and* 8 MB/s): everything at once — ~7.7s against Grackle's ~0.2s.
 
 These figures are **indicative**, not validated: quick medians from `OverfetchTiming` (not a JMH
 benchmark), and they live in `charts/chart-data-timing.json`, separate from the DB-validated

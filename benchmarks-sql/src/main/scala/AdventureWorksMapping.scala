@@ -53,13 +53,19 @@ trait AdventureWorksSchema[F[_]] extends DoobiePgMapping[F] {
     val addressTypeId = col("addresstypeid", Meta[Int])
   }
 
-  // Mapped to the `person.person_heavy` view (not the base table) so the deliberately expensive
-  // `heavy` computed column is available. Grackle selects it only when a query asks for it; see
-  // `testdata/benchmark-pg/20-heavy-column.sql`.
-  object person extends TableDef("person.person_heavy") {
+  object person extends TableDef("person.person") {
     val businessEntityId = col("businessentityid", Meta[Int])
     val firstName = col("firstname", Meta[String])
     val lastName = col("lastname", Meta[String])
+  }
+
+  // The `person.person_heavy` view, carrying the deliberately expensive `heavy` and byte-wide
+  // `wide` columns, exposed through the separate `people` root used only by the over-fetch demo.
+  // Kept off the chain's `person` table so the latency/statement benchmarks never touch these
+  // columns. See `testdata/benchmark-pg/20-heavy-column.sql`.
+  object personHeavy extends TableDef("person.person_heavy") {
+    val businessEntityId = col("businessentityid", Meta[Int])
+    val firstName = col("firstname", Meta[String])
     val heavy = col("heavy", Meta[Int])
     val wide = col("wide", Meta[String])
   }
@@ -108,6 +114,7 @@ trait AdventureWorksMapping[F[_]] extends AdventureWorksSchema[F] {
     schema"""
       type Query {
         countryRegions(code: String): [CountryRegion!]!
+        people: [PersonHeavy!]!
       }
       type CountryRegion {
         countryRegionCode: String!
@@ -129,9 +136,12 @@ trait AdventureWorksMapping[F[_]] extends AdventureWorksSchema[F] {
       type Person {
         firstName: String!
         lastName: String!
+        customers: [Customer!]!
+      }
+      type PersonHeavy {
+        firstName: String!
         heavy: Int!
         wide: String!
-        customers: [Customer!]!
       }
       type Customer {
         territoryId: Int
@@ -165,6 +175,7 @@ trait AdventureWorksMapping[F[_]] extends AdventureWorksSchema[F] {
   val AddressType = schema.ref("Address")
   val BusinessEntityAddressType = schema.ref("BusinessEntityAddress")
   val PersonType = schema.ref("Person")
+  val PersonHeavyType = schema.ref("PersonHeavy")
   val CustomerType = schema.ref("Customer")
   val SalesOrderHeaderType = schema.ref("SalesOrderHeader")
   val SalesOrderDetailType = schema.ref("SalesOrderDetail")
@@ -175,7 +186,8 @@ trait AdventureWorksMapping[F[_]] extends AdventureWorksSchema[F] {
   val typeMappings =
     TypeMappings(
       ObjectMapping(QueryType)(
-        SqlObject("countryRegions")
+        SqlObject("countryRegions"),
+        SqlObject("people")
       ),
       ObjectMapping(CountryRegionType)(
         SqlField("countryRegionCode", countryRegion.code, key = true),
@@ -208,9 +220,13 @@ trait AdventureWorksMapping[F[_]] extends AdventureWorksSchema[F] {
         SqlField("businessEntityId", person.businessEntityId, key = true, hidden = true),
         SqlField("firstName", person.firstName),
         SqlField("lastName", person.lastName),
-        SqlField("heavy", person.heavy),
-        SqlField("wide", person.wide),
         SqlObject("customers", Join(person.businessEntityId, customer.personId))
+      ),
+      ObjectMapping(PersonHeavyType)(
+        SqlField("businessEntityId", personHeavy.businessEntityId, key = true, hidden = true),
+        SqlField("firstName", personHeavy.firstName),
+        SqlField("heavy", personHeavy.heavy),
+        SqlField("wide", personHeavy.wide)
       ),
       ObjectMapping(CustomerType)(
         SqlField("id", customer.id, key = true, hidden = true),
