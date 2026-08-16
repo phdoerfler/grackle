@@ -164,18 +164,19 @@ class PersonEntity {
   var customers: ju.Set[CustomerEntity] = _
 }
 
+// Three flat entities over the same `person.person_heavy` view, each mapping a different subset of
+// the deliberately expensive columns. Hibernate selects exactly an entity's mapped scalars when it
+// loads a row, so fetching each one over-fetches exactly one thing — letting `OverfetchTiming`
+// isolate the compute cost from the byte cost instead of paying both at once. Kept off the chain's
+// `PersonEntity` so the latency/statement benchmarks never touch these columns. See
+// `testdata/benchmark-pg/20-heavy-column.sql`.
+
 /**
- * A flat Person mapped to the `person.person_heavy` view, carrying the deliberately expensive
- * `heavy` and byte-wide `wide` columns. Kept SEPARATE from `PersonEntity` on purpose: Hibernate
- * selects every mapped scalar when it loads an entity, so if the chain's `PersonEntity` carried
- * these columns, every ORM benchmark that reaches Person — including the latency sweep — would
- * pay for them, conflating over-fetch cost with round-trip cost. Only `OverfetchTiming` uses
- * this entity, so the over-fetch cost stays confined to the over-fetch demo. See
- * `testdata/benchmark-pg/20-heavy-column.sql`.
+ * Over-fetches the compute-heavy `heavy` column only — isolates CPU cost.
  */
 @Entity
 @Table(name = "person_heavy", schema = "person")
-class PersonHeavyEntity {
+class PersonComputeEntity {
   @Id
   @Column(name = "businessentityid")
   var businessEntityId: Integer = _
@@ -183,8 +184,39 @@ class PersonHeavyEntity {
   @Column(name = "firstname")
   var firstName: String = _
 
-  @Column(name = "lastname")
-  var lastName: String = _
+  @Column(name = "heavy")
+  var heavy: Integer = _
+}
+
+/**
+ * Over-fetches the byte-wide `wide` column only — isolates bandwidth cost.
+ */
+@Entity
+@Table(name = "person_heavy", schema = "person")
+class PersonBytesEntity {
+  @Id
+  @Column(name = "businessentityid")
+  var businessEntityId: Integer = _
+
+  @Column(name = "firstname")
+  var firstName: String = _
+
+  @Column(name = "wide")
+  var wide: String = _
+}
+
+/**
+ * Over-fetches both expensive columns — the combined finale.
+ */
+@Entity
+@Table(name = "person_heavy", schema = "person")
+class PersonBothEntity {
+  @Id
+  @Column(name = "businessentityid")
+  var businessEntityId: Integer = _
+
+  @Column(name = "firstname")
+  var firstName: String = _
 
   @Column(name = "heavy")
   var heavy: Integer = _

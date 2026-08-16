@@ -10,7 +10,9 @@
     <class>grackle.benchmarks.orm.AddressEntity</class>
     <class>grackle.benchmarks.orm.BusinessEntityAddressEntity</class>
     <class>grackle.benchmarks.orm.PersonEntity</class>
-    <class>grackle.benchmarks.orm.PersonHeavyEntity</class>
+    <class>grackle.benchmarks.orm.PersonComputeEntity</class>
+    <class>grackle.benchmarks.orm.PersonBytesEntity</class>
+    <class>grackle.benchmarks.orm.PersonBothEntity</class>
     <class>grackle.benchmarks.orm.CustomerEntity</class>
     <class>grackle.benchmarks.orm.SalesOrderHeaderEntity</class>
     <class>grackle.benchmarks.orm.SalesOrderDetailEntity</class>

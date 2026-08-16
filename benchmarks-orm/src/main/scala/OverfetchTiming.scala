@@ -21,19 +21,20 @@ import cats.implicits._
 import grackle.benchmarks.sql.{AdventureWorksMapping, BenchmarkDb, Toxiproxy}
 
 /**
- * Indicative timing for the over-fetch effect: the same set of Person rows fetched by Grackle,
- * which projects only the requested `firstName`, and by the ORM, whose whole-entity fetch of
- * `PersonHeavyEntity` also selects the deliberately expensive `heavy` and byte-wide `wide`
- * columns that nobody asked for. The two arms fetch the identical rows through the
- * `person.person_heavy` view, so the only difference is which columns leave the database.
+ * Indicative timing for the over-fetch effect. Every panel fetches the same Person rows through
+ * the same `person.person_heavy` view; the only difference is which columns leave the database.
+ * Grackle projects just `firstName` in all of them, so it is the constant baseline; the ORM
+ * loads whichever entity the panel names, and Hibernate selects exactly that entity's mapped
+ * scalars — so each panel over-fetches exactly one thing and isolates one cost:
  *
- * Deliberately NOT routed through the deep chain: `PersonHeavyEntity` and the `people` root
- * exist only here, so the expensive columns never touch the latency/statement benchmarks (which
- * would otherwise conflate over-fetch cost with round-trip cost).
+ *   - compute: `PersonComputeEntity` (adds `heavy`), full bandwidth — pure CPU
+ *   - bandwidth: `PersonBytesEntity` (adds `wide`), throttled — pure bytes
+ *   - finale: `PersonBothEntity` (adds both), throttled + RTT — everything
  *
- * Uses a POOLED transactor for Grackle (as the JMH benchmark does), so a reused connection pays
- * only each request's round trips, not a fresh TCP+auth handshake per query. NOT a JMH
- * benchmark and NOT validated — quick medians for the illustrative chart only.
+ * These entities and the `people` root exist only here, so the expensive columns never touch
+ * the latency/statement benchmarks. Uses a POOLED transactor for Grackle (as the JMH benchmark
+ * does), so a reused connection pays only each request's round trips, not a fresh handshake per
+ * query. NOT a JMH benchmark and NOT validated — quick medians for the illustrative chart only.
  */
 object OverfetchTiming extends IOApp.Simple {
 
@@ -56,33 +57,29 @@ object OverfetchTiming extends IOApp.Simple {
     BenchmarkDb.transactorResource[IO].use { xa =>
       val mapping = AdventureWorksMapping.mkMapping[IO](xa)
       val factory = OrmDb.emf()
-      // Grackle projects exactly `firstName`; the ORM loads the whole entity, `heavy`/`wide` and all.
       val grackle = mapping.compileAndRun("query { people { firstName } }").void
-      val eager = IO.blocking {
-        val em = factory.createEntityManager()
-        try {
-          val _ = em
-            .createQuery("select p from PersonHeavyEntity p", classOf[PersonHeavyEntity])
-            .getResultList()
-          ()
-        } finally em.close()
-      }
+      def fetchOrm(entity: String): IO[Unit] =
+        IO.blocking {
+          val em = factory.createEntityManager()
+          try { val _ = em.createQuery(s"select p from $entity p").getResultList(); () }
+          finally em.close()
+        }
 
-      def under(label: String, rttMs: Int, kbps: Int): IO[Unit] =
+      def under(label: String, rttMs: Int, kbps: Int, entity: String): IO[Unit] =
         for {
           _ <- IO.blocking(Toxiproxy.setConditions(rttMs, kbps))
           g <- medianMs(grackle)
-          e <- medianMs(eager)
+          e <- medianMs(fetchOrm(entity))
           _ <- IO.println(s">>>PANEL $label rtt=$rttMs kbps=$kbps grackle=$g eager=$e<<<")
         } yield ()
 
       for {
         _ <- BenchmarkDb.prewarm[IO](xa)
         _ <- grackle // prime both connection pools before any condition
-        _ <- eager
-        _ <- under("compute", 0, 0)
-        _ <- under("bandwidth", 0, 8000)
-        _ <- under("finale", 50, 8000)
+        _ <- fetchOrm("PersonBothEntity")
+        _ <- under("compute", 0, 0, "PersonComputeEntity")
+        _ <- under("bandwidth", 0, 8000, "PersonBytesEntity")
+        _ <- under("finale", 50, 8000, "PersonBothEntity")
         _ <- IO.blocking(Toxiproxy.clearToxics())
         _ <- IO.blocking(factory.close())
       } yield ()

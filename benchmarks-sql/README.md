@@ -356,24 +356,25 @@ is measurable, so `testdata/benchmark-pg/20-heavy-column.sql` adds two exaggerat
   fetch runs it once per row.
 - `wide` — ~2KB of text per row: cheap to compute, but **bytes** on the wire.
 
-These columns are reached only through a dedicated `people` root (Grackle) and `PersonHeavyEntity`
-(Hibernate); they are deliberately kept off the join chain so the statement and latency benchmarks
-above never touch them — otherwise every ORM fetch that reached Person would pay for `heavy` and
-conflate over-fetch cost with round-trip cost. `grackle.benchmarks.orm.OverfetchTiming` fetches
-every Person row through that root — Grackle projecting only `firstName`, the ORM loading the whole
-entity — under conditions that isolate each cost:
+These columns are reached only through a dedicated `people` root (Grackle) and three purpose-built
+Hibernate entities over the `person_heavy` view — `PersonComputeEntity` (maps `heavy`),
+`PersonBytesEntity` (maps `wide`), `PersonBothEntity` (both) — that no other benchmark uses, so the
+statement and latency benchmarks above never touch these columns. Hibernate selects exactly an
+entity's mapped columns, so each panel over-fetches **one** thing: `grackle.benchmarks.orm.OverfetchTiming`
+fetches every Person row with Grackle always projecting only `firstName`, while the ORM loads whichever
+entity the panel names:
 
 <!-- CHART:overfetch-cost START -->
-<img src="charts/overfetch-cost.svg" alt="Over-fetch cost: ms/op by condition (indicative). eager ORM: 5933, 7028, 7730; Grackle: 203, 124, 222.">
+<img src="charts/overfetch-cost.svg" alt="Over-fetch cost: ms/op by condition (indicative). eager ORM: 2906, 5122, 5213; Grackle: 41, 81, 183.">
 <!-- CHART:overfetch-cost END -->
 
-- **Compute** (full bandwidth): the ORM over-fetches `heavy` and pays `heavy_fn` per row, plus the
-  materialization of ~20k full entities — ~5.9s against Grackle's ~0.2s. Pure CPU, so it survives a
-  fully cached database.
-- **Bandwidth** (throttled to 8 MB/s): the ORM also over-fetches `wide`'s bytes — ~7.0s against
-  Grackle's ~0.1s. (A *nested* query would be worse still: a wide column high in the chain is
-  repeated across every descendant row in the flattened result.)
-- **Finale** (50 ms RTT *and* 8 MB/s): everything at once — ~7.7s against Grackle's ~0.2s.
+- **Compute** — over-fetch `heavy` only, full bandwidth: the ORM pays `heavy_fn` per row — ~2.9s
+  against Grackle's ~40ms. Pure CPU, so it survives a fully cached database.
+- **Bandwidth** — over-fetch `wide` only, throttled to 8 MB/s: the ORM ships the extra ~40 MB of 2KB
+  text — ~5.1s against Grackle's ~80ms. Pure bytes. (A *nested* query would be worse still: a wide
+  column high in the chain is repeated across every descendant row in the flattened result.)
+- **Finale** — over-fetch both, 50 ms RTT *and* 8 MB/s: everything at once — ~5.2s against Grackle's
+  ~0.2s.
 
 These figures are **indicative**, not validated: quick medians from `OverfetchTiming` (not a JMH
 benchmark), and they live in `charts/chart-data-timing.json`, separate from the DB-validated
