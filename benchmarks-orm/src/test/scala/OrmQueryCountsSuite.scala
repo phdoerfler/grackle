@@ -19,6 +19,8 @@ import scala.concurrent.duration._
 
 import munit.CatsEffectSuite
 
+import grackle.benchmarks.sql.ChartData
+
 class OrmQueryCountsSuite extends CatsEffectSuite {
   override val munitIOTimeout: Duration = 5.minutes
 
@@ -32,10 +34,35 @@ class OrmQueryCountsSuite extends CatsEffectSuite {
       grackle.foreach(c =>
         assertEquals(c.statements, 1, s"grackle shape ${c.shape} was not 1 query"))
 
+      // Cross-check the measured counts against `charts/chart-data.json`, the source the README
+      // charts are generated from, so a chart cannot drift from what the arms actually issue.
+      // Grackle is deterministic and pinned exactly; the ORM arms jitter by a handful of statements
+      // per run (see the untuned note below), so they're held within a generous tolerance that
+      // still rules out a stale or fabricated chart figure.
+      val chart = ChartData.load
+      val ormTolerance = 30
+
       OrmQueryShapes.all.foreach { shape =>
+        val i = chart.statementsPerShape.shapes.indexOf(shape.name)
+        assert(i >= 0, s"shape ${shape.name} is missing from chart-data.json")
         val grackleCount = grackle.find(_.shape == shape.name).get.statements
         val naiveCount = naive.find(_.shape == shape.name).get.statements
         val eagerCount = eager.find(_.shape == shape.name).get.statements
+
+        assertEquals(
+          grackleCount,
+          chart.statementsPerShape.grackle(i),
+          s"shape ${shape.name}: grackle count drifted from chart-data.json")
+        assert(
+          Math.abs(naiveCount - chart.statementsPerShape.naive(i)) <= ormTolerance,
+          s"shape ${shape.name}: naive count $naiveCount is more than $ormTolerance off " +
+            s"chart-data.json's ${chart.statementsPerShape.naive(i)}"
+        )
+        assert(
+          Math.abs(eagerCount - chart.statementsPerShape.eager(i)) <= ormTolerance,
+          s"shape ${shape.name}: eager count $eagerCount is more than $ormTolerance off " +
+            s"chart-data.json's ${chart.statementsPerShape.eager(i)}"
+        )
 
         // The headline "Grackle 1, ORM many" claim this whole harness exists to demonstrate:
         // real observed ratios are roughly 260:1 and 1800:1 (naive:grackle) across shapes, so a

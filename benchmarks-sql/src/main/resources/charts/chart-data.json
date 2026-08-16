@@ -1,0 +1,18 @@
+{
+  "_comment": "Single source of truth for the mermaid charts in benchmarks-sql/README.md. Regenerate the README charts with `sbt benchmarksSql/generateCharts`; CI runs `benchmarksSql/checkCharts` to fail if they drift. These numbers are validated against a live database by SqlQueryCountsSuite and OrmQueryCountsSuite, which assert that the measured counts equal the values here.",
+  "statementsPerShape": {
+    "shapes": ["shallow-narrow", "deep-narrow", "deep-wide", "untuned"],
+    "naive": [63, 271, 272, 260],
+    "eager": [1, 1, 1, 261],
+    "grackle": [1, 1, 1, 1]
+  },
+  "grackleStatementsByDepth": {
+    "depths": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    "statements": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+  },
+  "rowsByDepth": {
+    "depths": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    "unfiltered": [407, 19947, 19947, 19947, 19947, 29128, 61898, 61898, 61898, 61898],
+    "filtered": [96, 1929, 1929, 1929, 1929, 2603, 5677, 5677, 5677, 5677]
+  }
+}

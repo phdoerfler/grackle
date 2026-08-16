@@ -101,9 +101,9 @@ jobs:
         if: matrix.java == 'temurin@11' && matrix.os == 'ubuntu-22.04'
         run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' doc
 
-      - name: Check benchmarks-sql headers and formatting
+      - name: Check benchmarks-sql headers, formatting, and charts
         if: matrix.project == 'rootJVM'
-        run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' benchmarksSql/headerCheckAll benchmarksSql/scalafmtCheckAll
+        run: sbt 'project ${{ matrix.project }}' '++ ${{ matrix.scala }}' benchmarksSql/headerCheckAll benchmarksSql/scalafmtCheckAll benchmarksSql/checkCharts
 
       - name: Check benchmarks-orm headers and formatting
         if: matrix.project == 'rootJVM'

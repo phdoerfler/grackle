@@ -6,7 +6,9 @@ walks deeper down a real 11-table join chain (AdventureWorks-for-Postgres: `Coun
 → SalesOrderDetail → Product → ProductSubcategory → ProductCategory`), against a
 dedicated Postgres instance seeded via Docker.
 
-Out of scope for this phase: chart publishing, CI wiring.
+The charts below are generated from `charts/chart-data.json` (`sbt benchmarksSql/generateCharts`)
+and verified in CI (`benchmarksSql/checkCharts`). Interactive charts and a public results site
+remain future work.
 
 ## Topology
 
@@ -130,19 +132,17 @@ Hibernate/JPA arms — a naive lazy-loading arm and an eager arm (blanket `@Batc
 plus a per-shape `@EntityGraph`). Their statement counts make Grackle's single query
 concrete by contrast:
 
-<!-- Chart data pinned by SqlQueryCountsSuite (Grackle == 1) and OrmQueryCountsSuite
-     (naive/eager per shape); re-sync only when one of those tests is deliberately updated.
-     xychart-beta has no series legend, hence the caption. -->
-
+<!-- CHART:statements-per-shape START -->
 ```mermaid
 xychart-beta
   title "SQL statements per query shape"
   x-axis ["shallow-narrow", "deep-narrow", "deep-wide", "untuned"]
-  y-axis "statements issued" 0 --> 280
+  y-axis "statements issued" 0 --> 300
   line [63, 271, 272, 260]
   line [1, 1, 1, 261]
   line [1, 1, 1, 1]
 ```
+<!-- CHART:statements-per-shape END -->
 
 Top line is the naive arm (63-272 statements, classic N+1). The middle line is the eager
 arm: 1 statement on the three shapes its entity graphs were tuned for, then collapsing to
@@ -154,8 +154,7 @@ chooses the shape, "the shape nobody tuned for" is the normal case.
 Grackle's own count is not just low but flat in depth — nesting another level onto the
 query never adds a statement:
 
-<!-- Grackle-per-depth count pinned by SqlQueryCountsSuite (== 1 at every depth). -->
-
+<!-- CHART:grackle-statements-by-depth START -->
 ```mermaid
 xychart-beta
   title "Grackle SQL statements vs join depth"
@@ -163,6 +162,7 @@ xychart-beta
   y-axis "statements issued" 0 --> 5
   line [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 ```
+<!-- CHART:grackle-statements-by-depth END -->
 
 The `rows` column reports the total rows Grackle's SQL fetched at each depth, and in
 both datasets it is monotonic non-decreasing in `depth`, then flat once the chain
@@ -195,9 +195,7 @@ That single statement covers an arbitrary amount of data. The rows it fetches cl
 depth and then plateau once the chain reaches `SalesOrderDetail` at depth 7 — while the
 statement count above never moves off 1:
 
-<!-- Row counts pinned by SqlQueryCountsSuite's "row counts per depth match the pinned
-     AdventureWorks fixture" test; re-sync both together if the fixture changes. -->
-
+<!-- CHART:rows-by-depth START -->
 ```mermaid
 xychart-beta
   title "Rows fetched vs join depth (1 statement throughout)"
@@ -206,6 +204,7 @@ xychart-beta
   line [407, 19947, 19947, 19947, 19947, 29128, 61898, 61898, 61898, 61898]
   line [96, 1929, 1929, 1929, 1929, 2603, 5677, 5677, 5677, 5677]
 ```
+<!-- CHART:rows-by-depth END -->
 
 Upper line is the unfiltered root (all country regions, 61,898 rows at the plateau);
 lower line is the single-region `FR` root (5,677), the same curve at roughly a

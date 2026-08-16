@@ -70,8 +70,11 @@ ThisBuild / githubWorkflowBuild ~= { steps =>
 // Cover it explicitly with a single step, gated to one matrix leg so it
 // runs once per build rather than once per (project, scala) combination.
 ThisBuild / githubWorkflowBuild += WorkflowStep.Sbt(
-  commands = List("benchmarksSql/headerCheckAll", "benchmarksSql/scalafmtCheckAll"),
-  name = Some("Check benchmarks-sql headers and formatting"),
+  commands = List(
+    "benchmarksSql/headerCheckAll",
+    "benchmarksSql/scalafmtCheckAll",
+    "benchmarksSql/checkCharts"),
+  name = Some("Check benchmarks-sql headers, formatting, and charts"),
   cond = Some("matrix.project == 'rootJVM'")
 )
 ThisBuild / githubWorkflowBuild += WorkflowStep.Sbt(
@@ -129,6 +132,11 @@ lazy val mssqlUp = taskKey[Unit]("Start SQL Server")
 lazy val mssqlStop = taskKey[Unit]("Stop SQL Server")
 lazy val benchPgUp = taskKey[Unit]("Start benchmark Postgres (AdventureWorks)")
 lazy val benchPgStop = taskKey[Unit]("Stop benchmark Postgres (AdventureWorks)")
+lazy val generateCharts =
+  taskKey[Unit](
+    "Regenerate the mermaid charts in benchmarks-sql/README.md from chart-data.json")
+lazy val checkCharts =
+  taskKey[Unit]("Fail if benchmarks-sql/README.md charts are out of sync with chart-data.json")
 
 ThisBuild / allUp := runDocker("docker compose up -d --wait --quiet-pull")
 ThisBuild / allStop := runDocker("docker compose stop")
@@ -476,7 +484,18 @@ lazy val benchmarksSql = project
           "benchmark-postgres toxiproxy"
       )),
     Jmh / run :=
-      Def.inputTask((Jmh / run).evaluated).dependsOn(ThisBuild / benchPgUp).evaluated
+      Def.inputTask((Jmh / run).evaluated).dependsOn(ThisBuild / benchPgUp).evaluated,
+    // Regenerate / verify the README charts by running ChartGen against an absolute README path, so
+    // it is independent of the forked run's working directory. `check` exits non-zero on drift,
+    // which fails the task (and CI).
+    generateCharts := Def.taskDyn {
+      val readme = (baseDirectory.value / "README.md").getAbsolutePath
+      (Compile / runMain).toTask(s" grackle.benchmarks.sql.ChartGen generate $readme")
+    }.value,
+    checkCharts := Def.taskDyn {
+      val readme = (baseDirectory.value / "README.md").getAbsolutePath
+      (Compile / runMain).toTask(s" grackle.benchmarks.sql.ChartGen check $readme")
+    }.value
   )
 
 // Deliberately NOT included in `modules` / the root aggregate, for the same reason as

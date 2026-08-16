@@ -86,31 +86,32 @@ class SqlQueryCountsSuite extends CatsEffectSuite {
   }
 
   // The relative invariants above (query count constant, US > FR, unfiltered > filtered) all stay
-  // green even if the absolute row counts shift wholesale, so they cannot catch a regression that
-  // changes *which* rows Grackle fetches. These exact figures, measured against the pinned
-  // AdventureWorks fixture, pin that down. In particular the plateau at depth 7 — 5,677 (filtered)
-  // and 61,898 (unfiltered) held flat through depth 10 — is the visible signature of
-  // typelevel/grackle#888: the deeper INNER JOINs are nested inside LEFT JOIN LATERALs, so they
-  // no longer eliminate the 119 (filtered) null-padded upstream rows. Before that fix the counts
-  // dropped to 5,558 / 60,459 at depth 8; a regression to that behaviour would fail here.
-  test("row counts per depth match the pinned AdventureWorks fixture") {
-    val expectedFiltered =
-      List(96, 1929, 1929, 1929, 1929, 2603, 5677, 5677, 5677, 5677)
-    val expectedUnfiltered =
-      List(407, 19947, 19947, 19947, 19947, 29128, 61898, 61898, 61898, 61898)
-
+  // green even if the absolute counts shift wholesale, so they cannot catch a regression that
+  // changes *which* rows Grackle fetches. This test pins the exact figures — and does so against
+  // `charts/chart-data.json`, the same source the README charts are generated from, so the charts
+  // cannot silently drift from what the database actually returns. In particular the plateau at
+  // depth 7 — 5,677 (filtered) and 61,898 (unfiltered) held flat through depth 10 — is the visible
+  // signature of typelevel/grackle#888: the deeper INNER JOINs are nested inside LEFT JOIN
+  // LATERALs, so they no longer eliminate the 119 (filtered) null-padded upstream rows. Before
+  // that fix the counts dropped to 5,558 / 60,459 at depth 8; a regression to that would fail here.
+  test("row and query counts per depth match charts/chart-data.json") {
+    val data = ChartData.load
     for {
       filtered <- SqlQueryCounts.countsFor(JoinChain.defaultRootCode)
       unfiltered <- SqlQueryCounts.countsForUnfiltered
     } yield {
       assertEquals(
         filtered.map(_.rows),
-        expectedFiltered,
-        s"filtered (${JoinChain.defaultRootCode}) row counts drifted from the pinned fixture")
+        data.rowsByDepth.filtered,
+        s"filtered (${JoinChain.defaultRootCode}) row counts drifted from chart-data.json")
       assertEquals(
         unfiltered.map(_.rows),
-        expectedUnfiltered,
-        "unfiltered row counts drifted from the pinned fixture")
+        data.rowsByDepth.unfiltered,
+        "unfiltered row counts drifted from chart-data.json")
+      assertEquals(
+        filtered.map(_.queries),
+        data.grackleStatementsByDepth.statements,
+        "Grackle per-depth statement counts drifted from chart-data.json")
     }
   }
 }
