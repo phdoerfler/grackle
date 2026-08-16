@@ -8,9 +8,13 @@
 > findings survive intact, because assembly is per-invocation CPU rather than round trips, and that
 > only the zero-latency baselines and the `deep-wide` constant move.
 >
-> The ORM arms also now prune branches that the schema's non-null hops (`product: Product!`,
-> `category: ProductCategory!`) eliminate from Grackle's result set, so both arms assemble the
-> same nodes rather than the ORM arms assembling more.
+> The ORM arms also now assemble the same node set as Grackle, including the null-padded rows a
+> nullable parent (`person`) or a childless collection leaves behind. Since typelevel/grackle#888
+> Grackle keeps those rows — a subordinate non-null hop no longer eliminates a row its parent
+> `LEFT JOIN` chose to keep — and the naive arm mirrors that by keeping the same empty collections
+> and `null` parents rather than pruning them (verified by `GrackleVsOrmParitySuite`). At
+> `a2f6bd37` the ORM arms both pruned those branches away and discarded everything but leaf names,
+> so relative to the figures here they now assemble strictly more per invocation, not less.
 
 Measured 2026-08-05 against `benchmark-postgres` (AdventureWorks) through Toxiproxy, on a WSL2
 workstation. JMH `Mode.SampleTime`, `@Fork(1)`, 2 warmup + 5 measurement iterations at 5s each,
