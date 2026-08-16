@@ -15,9 +15,16 @@
 
 package grackle.benchmarks.sql
 
+import scala.concurrent.duration._
+
 import munit.CatsEffectSuite
 
 class SqlQueryCountsSuite extends CatsEffectSuite {
+
+  // Each test runs several full depth sweeps against the database (FR + US, or filtered +
+  // unfiltered), which can exceed munit's 30s default when the box is loaded. Match the sibling
+  // OrmQueryCountsSuite's generous ceiling rather than flake.
+  override val munitIOTimeout: Duration = 5.minutes
 
   test("query count does not grow with result-set size (N+1 immunity)") {
     for {

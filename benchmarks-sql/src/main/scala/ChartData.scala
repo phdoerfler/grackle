@@ -73,3 +73,36 @@ object ChartData {
     io.circe.parser.decode[ChartData](text).fold(throw _, identity)
   }
 }
+
+/**
+ * Provisional timing numbers for the latency chart, kept SEPARATE from [[ChartData]] on
+ * purpose: these are an indicative snapshot from a quick benchmark run, not deterministic and
+ * not validated against the database, so they must not sit in the file whose invariant is that
+ * every number is DB-checked. See `chart-data-timing.json` for the caveats.
+ */
+final case class TimingData(untunedMsVsRtt: UntunedMsVsRtt)
+
+final case class UntunedMsVsRtt(
+    latencyMs: List[Int],
+    grackle: List[Int],
+    eager: List[Int],
+    naive: List[Int])
+
+object TimingData {
+  val resourcePath = "/charts/chart-data-timing.json"
+
+  implicit val untunedMsVsRttDecoder: Decoder[UntunedMsVsRtt] =
+    Decoder.forProduct4("latencyMs", "grackle", "eager", "naive")(UntunedMsVsRtt.apply)
+
+  implicit val timingDataDecoder: Decoder[TimingData] =
+    Decoder.forProduct1("untunedMsVsRtt")(TimingData.apply)
+
+  def load: TimingData = {
+    val stream = Option(getClass.getResourceAsStream(resourcePath))
+      .getOrElse(sys.error(s"timing data resource not found on the classpath: $resourcePath"))
+    val text =
+      try Source.fromInputStream(stream, "UTF-8").mkString
+      finally stream.close()
+    io.circe.parser.decode[TimingData](text).fold(throw _, identity)
+  }
+}

@@ -252,10 +252,38 @@ object ChartGen {
   }
 
   /**
+   * The indicative latency chart, built from the provisional [[TimingData]] rather than the
+   * DB-validated [[ChartData]]. The title carries "(indicative)" because these numbers are a
+   * quick snapshot, not a publishable sweep.
+   */
+  def timingChart(t: TimingData): BarChart = {
+    val u = t.untunedMsVsRtt
+    BarChart(
+      id = "untuned-ms-vs-rtt",
+      title = "untuned shape: mean ms/op vs RTT (indicative)",
+      categories = u.latencyMs.map(_.toString),
+      series = List(
+        Series("naive ORM", Palette.naive, u.naive),
+        Series("eager ORM", Palette.eager, u.eager),
+        Series("Grackle", Palette.grackle, u.grackle)),
+      yMax = axisMax((u.naive ++ u.eager ++ u.grackle).max),
+      xTitle = Some("injected RTT (ms)"),
+      valueLabels = true
+    )
+  }
+
+  /**
+   * Every chart rendered into the README, in order: the deterministic set plus the timing
+   * chart.
+   */
+  def allCharts(data: ChartData, timing: TimingData): List[BarChart] =
+    charts(data) :+ timingChart(timing)
+
+  /**
    * Applies every chart's `<img>` tag to `doc`, leaving all other content untouched.
    */
-  def renderReadme(doc: String, data: ChartData): String =
-    charts(data).foldLeft(doc)((acc, c) => splice(acc, c.id, imgTag(c)))
+  def renderReadme(doc: String, chartList: List[BarChart]): String =
+    chartList.foldLeft(doc)((acc, c) => splice(acc, c.id, imgTag(c)))
 
   def main(args: Array[String]): Unit = {
     val (mode, baseDir) = args.toList match {
@@ -265,11 +293,11 @@ object ChartGen {
     val base = Paths.get(baseDir)
     val readmePath = base.resolve("README.md")
     val chartsDir = base.resolve("charts")
-    val data = ChartData.load
+    val chartList = allCharts(ChartData.load, TimingData.load)
 
     val readmeNow = readString(readmePath)
-    val readmeNext = renderReadme(readmeNow, data)
-    val svgs = charts(data).map(c => (chartsDir.resolve(s"${c.id}.svg"), renderSvg(c)))
+    val readmeNext = renderReadme(readmeNow, chartList)
+    val svgs = chartList.map(c => (chartsDir.resolve(s"${c.id}.svg"), renderSvg(c)))
 
     mode match {
       case "generate" =>

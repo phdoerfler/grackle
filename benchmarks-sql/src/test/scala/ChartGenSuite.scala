@@ -32,6 +32,15 @@ class ChartGenSuite extends FunSuite {
     assertEquals(data.rowsByDepth.filtered.last, 5677)
   }
 
+  test("provisional timing data loads and drives the latency chart") {
+    val timing = TimingData.load
+    assertEquals(timing.untunedMsVsRtt.latencyMs, List(0, 20, 50))
+    val c = ChartGen.timingChart(timing)
+    assertEquals(c.id, "untuned-ms-vs-rtt")
+    assertEquals(c.series.length, 3)
+    assert(c.title.contains("indicative"), "the timing chart must be labelled indicative")
+  }
+
   test("axisMax rounds to a nice bound just above the max") {
     assertEquals(ChartGen.axisMax(1), 5)
     assertEquals(ChartGen.axisMax(5), 5)
@@ -87,17 +96,20 @@ class ChartGenSuite extends FunSuite {
   }
 
   test("renderReadme injects an img tag per chart and is idempotent") {
-    val doc = ChartGen
-      .charts(data)
+    val chartList = ChartGen.allCharts(data, TimingData.load)
+    val doc = chartList
       .map(_.id)
       .map(id => s"<!-- CHART:$id START -->\n<!-- CHART:$id END -->")
       .mkString("\n\n")
-    val once = ChartGen.renderReadme(doc, data)
-    val twice = ChartGen.renderReadme(once, data)
+    val once = ChartGen.renderReadme(doc, chartList)
+    val twice = ChartGen.renderReadme(once, chartList)
     assertEquals(twice, once)
     assert(
       once.contains("""<img src="charts/statements-per-shape.svg""""),
       "should embed the generated SVG by relative path")
+    assert(
+      once.contains("""<img src="charts/untuned-ms-vs-rtt.svg""""),
+      "should embed the timing chart too")
   }
 
   test("splice fails loudly on a missing marker") {

@@ -259,6 +259,18 @@ costs. On a local Docker network the RTT to Postgres is near zero, so the naive 
 ~260 extra statements cost only a few hundred milliseconds — in production, where the
 database is across a network, that same statement count is the whole story.
 
+<!-- CHART:untuned-ms-vs-rtt START -->
+<img src="charts/untuned-ms-vs-rtt.svg" alt="untuned shape: mean ms/op vs RTT (indicative). naive ORM: 1302, 6644, 14529; eager ORM: 1219, 6812, 14579; Grackle: 112, 145, 204.">
+<!-- CHART:untuned-ms-vs-rtt END -->
+
+*Indicative preview only.* Unlike every other chart here, these numbers are **not**
+test-validated or reproducible: they come from a quick `-f1 -wi2 -i3` run with wide
+confidence intervals and live in `charts/chart-data-timing.json`, kept separate from the
+DB-validated `chart-data.json`. Read them as the shape of the gap, not authoritative figures. A
+publishable sweep would refresh them. Even so the story is clear: at 50 ms injected RTT the eager
+arm's `untuned` shape — the one its entity graphs do not cover — runs roughly 70x Grackle's,
+while Grackle stays flat. The N+1 penalty is a round-trip penalty.
+
 `OrmVsGrackleBenchmark` (in the `benchmarksOrm` module) sweeps a `latencyMs` param over
 0, 5, 20, and 50 alongside its existing three arms and four shapes, giving 48
 combinations in a single run:

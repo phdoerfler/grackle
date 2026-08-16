@@ -1,0 +1,9 @@
+{
+  "_comment": "INDICATIVE timing preview — NOT test-validated and NOT reproducible, unlike chart-data.json. Mean ms/op for the `untuned` shape vs injected RTT, from a quick OrmVsGrackleBenchmark run (-f1 -wi2 -i3 -r2s, wide confidence intervals). A publishable sweep would refresh these; treat them as a snapshot showing the shape of the gap, not authoritative figures. Regenerate the chart with `sbt benchmarksSql/generateCharts`.",
+  "untunedMsVsRtt": {
+    "latencyMs": [0, 20, 50],
+    "grackle": [112, 145, 204],
+    "eager": [1219, 6812, 14579],
+    "naive": [1302, 6644, 14529]
+  }
+}
