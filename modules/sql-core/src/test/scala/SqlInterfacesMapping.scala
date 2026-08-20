@@ -251,4 +251,7 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
         case Series => 2
       }
   }
+
+  implicit val entityTypeCellDecoder: CellDecoder[EntityType] =
+    CellDecoder.from(s => EntityType.fromInt(s.toInt))
 }

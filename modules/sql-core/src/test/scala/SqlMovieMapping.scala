@@ -322,4 +322,9 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
 
   implicit val durationOrder: Order[Duration] =
     Order.fromComparable[Duration]
+
+  implicit val genreCellDecoder: CellDecoder[Genre] =
+    CellDecoder.from(s => Genre.fromInt(s.toInt))
+  implicit val featureCellDecoder: CellDecoder[Feature] =
+    CellDecoder.from(Feature.fromString)
 }

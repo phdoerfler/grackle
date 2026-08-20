@@ -157,4 +157,7 @@ trait SqlRecursiveInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
         case ItemB => 2
       }
   }
+
+  implicit val itemTypeCellDecoder: CellDecoder[ItemType] =
+    CellDecoder.from(s => ItemType.fromInt(s.toInt))
 }
