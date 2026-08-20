@@ -34,8 +34,9 @@ trait SqlTestData[F[_]] extends SqlTestMapping[F] {
    */
   def runCommand(fragment: Fragment): F[Unit]
 
-  /** A table's delete (truncate) and insert steps, kept separate so `loadAll` can run all
-   *  deletes before all inserts and thereby respect foreign keys across a dataset's tables.
+  /**
+   * A table's delete (truncate) and insert steps, kept separate so `loadAll` can run all
+   * deletes before all inserts and thereby respect foreign keys across a dataset's tables.
    */
   // Plain class, not a case class: a nested case class in this F-parameterised trait would
   // synthesise an `equals` with an outer-reference type test (fatal under CI). Not needed here.
@@ -46,9 +47,10 @@ trait SqlTestData[F[_]] extends SqlTestMapping[F] {
    */
   def seedData: List[SeedTable]
 
-  /** Delete every table (children first, i.e. reverse of the parent-first `seedData` order),
-   *  then insert every table (parents first). This keeps re-seeding idempotent on a persistent
-   *  container without tripping foreign-key constraints.
+  /**
+   * Delete every table (children first, i.e. reverse of the parent-first `seedData` order),
+   * then insert every table (parents first). This keeps re-seeding idempotent on a persistent
+   * container without tripping foreign-key constraints.
    */
   def loadAll: F[Unit] =
     seedData.reverse.traverse_(_.delete) >> seedData.traverse_(_.insert)

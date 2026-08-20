@@ -27,7 +27,8 @@ trait SqlRecursiveInterfacesMapping[F[_]] extends SqlTestData[F] { self =>
   def seedData: List[SeedTable] =
     List(
       seedTable(items, "recursive-interfaces/recursive_interface_items.csv"),
-      seedTable(nextItems, "recursive-interfaces/recursive_interface_next_items.csv"))
+      seedTable(nextItems, "recursive-interfaces/recursive_interface_next_items.csv")
+    )
   def itemType: TestCodec[ItemType]
 
   object items extends TableDef("recursive_interface_items") {

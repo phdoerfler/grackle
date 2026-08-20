@@ -59,7 +59,8 @@ object CellDecoder {
           // strip a single pair of surrounding double quotes before decoding.
           val t = e.trim
           val unquoted =
-            if (t.length >= 2 && t.startsWith("\"") && t.endsWith("\"")) t.substring(1, t.length - 1)
+            if (t.length >= 2 && t.startsWith("\"") && t.endsWith("\""))
+              t.substring(1, t.length - 1)
             else t
           d.decode(unquoted)
         }

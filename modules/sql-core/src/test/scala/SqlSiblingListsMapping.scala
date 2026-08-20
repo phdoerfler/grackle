@@ -30,7 +30,8 @@ trait SqlSiblingListsData[F[_]] extends SqlTestData[F] {
       seedTable(aTable, "sibling-lists/seq_scan_a.csv"),
       seedTable(bTable, "sibling-lists/seq_scan_b.csv"),
       seedTable(cTable, "sibling-lists/seq_scan_c.csv"),
-      seedTable(dTable, "sibling-lists/seq_scan_d.csv"))
+      seedTable(dTable, "sibling-lists/seq_scan_d.csv")
+    )
 
   object aTable extends TableDef("seq_scan_a") {
     val id = col("id", varchar)

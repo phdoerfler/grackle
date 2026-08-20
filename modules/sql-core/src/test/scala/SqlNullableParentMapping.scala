@@ -26,7 +26,8 @@ trait SqlNullableParentMapping[F[_]] extends SqlTestData[F] {
       seedTable(cTable, "nullable-parent/nullable_parent_c.csv"),
       seedTable(dTable, "nullable-parent/nullable_parent_d.csv"),
       seedTable(eTable, "nullable-parent/nullable_parent_e.csv"),
-      seedTable(fTable, "nullable-parent/nullable_parent_f.csv"))
+      seedTable(fTable, "nullable-parent/nullable_parent_f.csv")
+    )
 
   object aTable extends TableDef("nullable_parent_a") {
     val id = col("id", int4)

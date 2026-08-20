@@ -30,7 +30,8 @@ trait SqlFilterOrderOffsetLimitMapping[F[_]] extends SqlTestData[F] {
     List(
       seedTable(root, "filter-order-offset-limit/root.csv"),
       seedTable(listA, "filter-order-offset-limit/lista.csv"),
-      seedTable(listB, "filter-order-offset-limit/listb.csv"))
+      seedTable(listB, "filter-order-offset-limit/listb.csv")
+    )
 
   object root extends TableDef("root") {
     val id = col("id", varchar)
