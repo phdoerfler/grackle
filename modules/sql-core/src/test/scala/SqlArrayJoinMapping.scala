@@ -17,13 +17,7 @@ package grackle.sql.test
 
 import grackle.syntax._
 
-trait SqlArrayJoinMapping[F[_]] extends SqlTestData[F] {
-
-  def seedData: List[SeedTable] =
-    List(
-      seedTable(root, "array-join/array_join_root.csv"),
-      seedTable(listA, "array-join/array_join_list_a.csv"),
-      seedTable(listB, "array-join/array_join_list_b.csv"))
+trait SqlArrayJoinMapping[F[_]] extends SqlTestMapping[F] {
 
   object root extends TableDef("array_join_root") {
     val id = col("id", varchar)

@@ -21,12 +21,7 @@ import grackle.QueryCompiler._
 import grackle.Value._
 import grackle.syntax._
 
-trait SqlEmbedding2Mapping[F[_]] extends SqlTestData[F] {
-
-  def seedData: List[SeedTable] =
-    List(
-      seedTable(ProgramTable, "embedding2/t_program.csv"),
-      seedTable(ObservationTable, "embedding2/t_observation.csv"))
+trait SqlEmbedding2Mapping[F[_]] extends SqlTestMapping[F] {
 
   object ProgramTable extends TableDef("t_program") {
     val Id = col("c_program_id", varchar)

@@ -17,11 +17,12 @@ package grackle.sql.test
 
 import cats.effect.IO
 import io.circe.literal._
+import munit.CatsEffectSuite
 
 import grackle._
 import grackle.test.GraphQLResponseTests.assertWeaklyEqualIO
 
-trait SqlArrayJoinSuite extends SqlSeedableSuite {
+trait SqlArrayJoinSuite extends CatsEffectSuite {
   def mapping: Mapping[IO]
 
   test("base query") {
