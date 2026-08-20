@@ -30,10 +30,14 @@ import cats.syntax.all._
  */
 trait SqlTestData[F[_]] extends SqlTestMapping[F] {
 
-  /** Execute a data-manipulation fragment, discarding results. Backend-specific. */
+  /**
+   * Execute a data-manipulation fragment, discarding results. Backend-specific.
+   */
   def runCommand(fragment: Fragment): F[Unit]
 
-  /** Each dataset overrides this with its `seedTable(...)` calls. */
+  /**
+   * Each dataset overrides this with its `seedTable(...)` calls.
+   */
   def seedData: List[F[Unit]]
 
   def loadAll(implicit F: Monad[F]): F[Unit] = seedData.sequence_
@@ -44,7 +48,7 @@ trait SqlTestData[F[_]] extends SqlTestMapping[F] {
     try {
       val lines = src.getLines().filter(_.nonEmpty).toList
       val header :: body = lines: @unchecked
-      (header.split('|').toList, body.map(_.split("\\|", -1).toList))
+      (header.split("\\|", -1).toList, body.map(_.split("\\|", -1).toList))
     } finally src.close()
   }
 
@@ -60,17 +64,24 @@ trait SqlTestData[F[_]] extends SqlTestMapping[F] {
 
     val truncate: Fragment = F0.const(s"DELETE FROM ${tableName.name}")
 
-    val insertRows: List[Fragment] = rows.map { cells =>
-      val bound = ordered.zip(cells).map { case (sc, cell) =>
-        val enc = toEncoder(sc.columnRef.codec)
-        if (cell == "\\N") F0.bind(enc, None)
-        else F0.bind(enc, sc.decode(cell))
-      }
-      val values = bound.reduce((a, b) => F0.combine(F0.combine(a, F0.const(", ")), b))
-      val colList = header.mkString(", ")
-      F0.combine(
-        F0.const(s"INSERT INTO ${tableName.name} ($colList) VALUES ("),
-        F0.combine(values, F0.const(")")))
+    val insertRows: List[Fragment] = rows.zipWithIndex.map {
+      case (cells, idx) =>
+        if (cells.length != ordered.length)
+          sys.error(
+            s"seed file $resourcePath: row ${idx + 1} has ${cells.length} field(s), " +
+              s"expected ${ordered.length} (header: ${header.mkString("|")}); " +
+              s"row content: ${cells.mkString("|")}")
+        val bound = ordered.zip(cells).map {
+          case (sc, cell) =>
+            val enc = toEncoder(sc.columnRef.codec)
+            if (cell == "\\N") F0.bind(enc, None)
+            else F0.bind(enc, sc.decode(cell))
+        }
+        val values = bound.reduce((a, b) => F0.combine(F0.combine(a, F0.const(", ")), b))
+        val colList = header.mkString(", ")
+        F0.combine(
+          F0.const(s"INSERT INTO ${tableName.name} ($colList) VALUES ("),
+          F0.combine(values, F0.const(")")))
     }
 
     (truncate :: insertRows).traverse_(runCommand)

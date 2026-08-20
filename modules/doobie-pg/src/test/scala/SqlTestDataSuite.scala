@@ -35,6 +35,8 @@ trait SqlTestDataFixture[F[_]] extends SqlTestData[F] {
 
   object films extends TableDef("films") {
     val title = col("title", text)
+    val synopsisShort = col("synopsis_short", nullable(text))
+    val synopsisLong = col("synopsis_long", nullable(text))
   }
 
   val schema =
@@ -64,12 +66,31 @@ trait SqlTestDataFixture[F[_]] extends SqlTestData[F] {
 }
 
 final class SqlTestDataSuite extends DoobiePgDatabaseSuite {
-  test("readRows splits header and body on |") {
-    val m = new DoobiePgTestMapping[IO](transactor) with SqlTestDataFixture[IO] {
+  def fixture: DoobiePgTestMapping[IO] with SqlTestDataFixture[IO] =
+    new DoobiePgTestMapping[IO](transactor) with SqlTestDataFixture[IO] {
       def F: Applicative[IO] = Applicative[IO]
     }
+
+  test("readRows splits header and body on |") {
+    val m = fixture
     val (header, rows) = m.readRowsForTest("embedding/films.csv")
     assertEquals(header, List("title", "synopsis_short", "synopsis_long"))
-    assert(rows.nonEmpty)
+    assertEquals(
+      rows,
+      List(
+        List("Film 1", "A short synopsis.", "A much longer synopsis of the first film."),
+        List("Film 2", "Another short synopsis.", "A much longer synopsis of the second film.")
+      )
+    )
+  }
+
+  test("seedTable raises a clear error when a row has more fields than the header") {
+    val m = fixture
+    val err = intercept[RuntimeException] {
+      m.seedTable(m.films, "embedding/films_malformed.csv")
+    }
+    assert(clue(err.getMessage).contains("row 1"))
+    assert(clue(err.getMessage).contains("4 field(s)"))
+    assert(clue(err.getMessage).contains("expected 3"))
   }
 }
