@@ -17,14 +17,19 @@ package grackle.doobie.test
 
 import java.time.Duration
 
+import cats.syntax.all._
 import io.circe.{Decoder => CDecoder, Encoder => CEncoder}
 import org.typelevel.doobie.Meta
+import org.typelevel.doobie.implicits._
 
 import grackle.doobie.DoobieMappingLike
 import grackle.sql.test._
 
 trait DoobieDatabaseSuite extends SqlDatabaseSuite {
   trait DoobieTestMapping[F[_]] extends DoobieMappingLike[F] with SqlTestMapping[F] {
+
+    def runCommand(fragment: Fragment): F[Unit] =
+      fragment.update.run.void.transact(transactor)
 
     type TestCodec[T] = (Meta[T], Boolean)
 

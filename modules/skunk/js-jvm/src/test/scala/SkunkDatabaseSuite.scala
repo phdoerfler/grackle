@@ -19,6 +19,7 @@ import java.time.{Duration, LocalDate, LocalTime, OffsetDateTime}
 import java.util.UUID
 
 import cats.effect.{IO, Resource, Sync}
+import cats.syntax.all._
 import io.circe.{Decoder => CDecoder, Encoder => CEncoder, Json}
 import munit.catseffect.IOFixture
 import org.typelevel.otel4s.metrics.Meter
@@ -63,6 +64,11 @@ trait SkunkDatabaseSuite extends SqlPgDatabaseSuite {
       monitor: SkunkMonitor[F] = SkunkMonitor.noopMonitor[IO])
       extends SkunkMapping[F](pool, monitor)
       with SqlTestMapping[F] {
+
+    def runCommand(fragment: Fragment): F[Unit] =
+      pool.use { session =>
+        session.prepare(fragment.fragment.command).flatMap(_.execute(fragment.argument)).void
+      }
 
     type TestCodec[T] = (SCodec[T], Boolean)
 

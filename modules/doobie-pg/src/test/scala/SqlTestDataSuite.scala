@@ -69,6 +69,8 @@ final class SqlTestDataSuite extends DoobiePgDatabaseSuite {
   def fixture: DoobiePgTestMapping[IO] with SqlTestDataFixture[IO] =
     new DoobiePgTestMapping[IO](transactor) with SqlTestDataFixture[IO] {
       def F: Applicative[IO] = Applicative[IO]
+      override def runCommand(fragment: Fragment): IO[Unit] =
+        super[SqlTestDataFixture].runCommand(fragment)
     }
 
   test("readRows splits header and body on |") {
