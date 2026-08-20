@@ -23,7 +23,10 @@ import grackle.Value._
 import grackle.sql.Like
 import grackle.syntax._
 
-trait SqlLikeMapping[F[_]] extends SqlTestMapping[F] {
+trait SqlLikeMapping[F[_]] extends SqlTestData[F] {
+
+  def seedData: List[F[Unit]] =
+    List(seedTable(likes, "like/likes.csv"))
 
   object likes extends TableDef("likes") {
     val id = col("id", int4)

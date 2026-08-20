@@ -23,7 +23,10 @@ import grackle.QueryCompiler._
 import grackle.Value._
 import grackle.syntax._
 
-trait SqlTreeMapping[F[_]] extends SqlTestMapping[F] {
+trait SqlTreeMapping[F[_]] extends SqlTestData[F] {
+
+  def seedData: List[F[Unit]] =
+    List(seedTable(bintree, "tree/bintree.csv"))
 
   object bintree extends TableDef("bintree") {
     val id = col("id", int4)

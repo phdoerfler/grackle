@@ -23,7 +23,14 @@ import grackle.QueryCompiler._
 import grackle.Value.StringValue
 import grackle.syntax._
 
-trait SqlSiblingListsData[F[_]] extends SqlTestMapping[F] {
+trait SqlSiblingListsData[F[_]] extends SqlTestData[F] {
+
+  def seedData: List[F[Unit]] =
+    List(
+      seedTable(aTable, "sibling-lists/seq_scan_a.csv"),
+      seedTable(bTable, "sibling-lists/seq_scan_b.csv"),
+      seedTable(cTable, "sibling-lists/seq_scan_c.csv"),
+      seedTable(dTable, "sibling-lists/seq_scan_d.csv"))
 
   object aTable extends TableDef("seq_scan_a") {
     val id = col("id", varchar)

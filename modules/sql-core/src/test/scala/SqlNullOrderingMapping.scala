@@ -20,7 +20,10 @@ import grackle.QueryCompiler.{Elab, SelectElaborator}
 import grackle.Value.{BooleanValue, IntValue}
 import grackle.syntax._
 
-trait SqlNullOrderingMapping[F[_]] extends SqlTestMapping[F] {
+trait SqlNullOrderingMapping[F[_]] extends SqlTestData[F] {
+
+  def seedData: List[F[Unit]] =
+    List(seedTable(nullOrdering, "null-ordering/null_ordering.csv"))
 
   object nullOrdering extends TableDef("null_ordering") {
     val id = col("id", int4)

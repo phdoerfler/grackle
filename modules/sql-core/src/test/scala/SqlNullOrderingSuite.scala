@@ -37,11 +37,10 @@ package grackle.sql.test
 // (Postgres, Oracle) unchanged.
 
 import cats.effect.IO
-import munit.CatsEffectSuite
 
 import grackle.Mapping
 
-trait SqlNullOrderingSuite extends CatsEffectSuite {
+trait SqlNullOrderingSuite extends SqlSeedableSuite {
   def mapping: Mapping[IO]
 
   // Fixture rows (id, v): (1, 10), (2, NULL), (3, 5), (4, NULL).
