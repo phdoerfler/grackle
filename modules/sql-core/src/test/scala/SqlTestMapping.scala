@@ -18,6 +18,8 @@ package grackle.sql.test
 import java.time.{Duration, LocalDate, LocalTime, OffsetDateTime}
 import java.util.UUID
 
+import scala.collection.mutable
+
 import io.circe.{Decoder => CDecoder, Encoder => CEncoder, Json}
 import org.tpolecat.sourcepos.SourcePos
 import org.tpolecat.typename.TypeName
@@ -50,9 +52,22 @@ trait SqlTestMapping[F[_]] extends SqlMappingLike[F] { outer =>
   def nullable[T](c: TestCodec[T]): TestCodec[T]
   def list[T: CDecoder: CEncoder](c: TestCodec[T]): TestCodec[List[T]]
 
+  final case class SeedColumn(name: String, columnRef: ColumnRef, decode: String => Any)
+
+  private val seedRegistry: mutable.Map[TableName, mutable.LinkedHashMap[String, SeedColumn]] =
+    mutable.Map.empty
+
+  def seedColumnsFor(table: TableName): Map[String, SeedColumn] =
+    seedRegistry.get(table).map(_.toMap).getOrElse(Map.empty)
+
   def col[T](colName: String, codec: TestCodec[T])(
       implicit tableName: TableName,
       typeName: TypeName[T],
-      pos: SourcePos): ColumnRef =
-    ColumnRef(tableName, colName, codec, typeName.value, pos)
+      cd: CellDecoder[T],
+      pos: SourcePos): ColumnRef = {
+    val cr = ColumnRef(tableName, colName, codec, typeName.value, pos)
+    val entry = SeedColumn(colName, cr, s => cd.decode(s))
+    seedRegistry.getOrElseUpdate(tableName, mutable.LinkedHashMap.empty).update(colName, entry)
+    cr
+  }
 }
