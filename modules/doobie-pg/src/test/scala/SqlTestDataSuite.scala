@@ -80,8 +80,9 @@ final class SqlTestDataSuite extends DoobiePgDatabaseSuite {
     assertEquals(
       rows,
       List(
-        List("Film 1", "A short synopsis.", "A much longer synopsis of the first film."),
-        List("Film 2", "Another short synopsis.", "A much longer synopsis of the second film.")
+        List("Film 1", "Short film 1", "Long film 1"),
+        List("Film 2", "Short film 2", "Long film 2"),
+        List("Film 3", "Short film 3", "Long film 3")
       )
     )
   }

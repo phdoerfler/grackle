@@ -73,9 +73,21 @@ trait SqlTestData[F[_]] extends SqlTestMapping[F] {
               s"row content: ${cells.mkString("|")}")
         val bound = ordered.zip(cells).map {
           case (sc, cell) =>
-            val enc = toEncoder(sc.columnRef.codec)
-            if (cell == "\\N") F0.bind(enc, None)
-            else F0.bind(enc, sc.decode(cell))
+            val codec = sc.columnRef.codec
+            val enc = toEncoder(codec)
+            val nullable = isNullable(codec)
+            if (cell == "\\N") {
+              if (!nullable)
+                sys.error(
+                  s"seed file $resourcePath: row ${idx + 1}: NULL ('\\N') for non-nullable " +
+                    s"column '${sc.name}'")
+              F0.bind(enc, None)
+            } else {
+              val decoded = sc.decode(cell)
+              // Nullable codecs are wrapped as `Option[T]` by the backend (e.g. `.opt`), even
+              // though `col`'s `TestCodec[T]` keeps the Scala type `T` at the call site.
+              F0.bind(enc, if (nullable) Some(decoded) else decoded)
+            }
         }
         val values = bound.reduce((a, b) => F0.combine(F0.combine(a, F0.const(", ")), b))
         val colList = header.mkString(", ")

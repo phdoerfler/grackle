@@ -16,7 +16,7 @@
 package grackle.sql.test
 
 import cats.effect.{IO, Resource}
-import munit.{AnyFixture, CatsEffectSuite}
+import munit.CatsEffectSuite
 import munit.catseffect.IOFixture
 
 import grackle.Mapping
@@ -39,5 +39,11 @@ trait SqlSeedableSuite extends CatsEffectSuite {
       }))
     )
 
-  override def munitFixtures: Seq[AnyFixture[_]] = super.munitFixtures :+ seedFixture
+  // Backend `*DatabaseSuite`s narrow `munitFixtures` to `Seq[IOFixture[_]]`; matching that
+  // narrower type here (rather than `AnyFixture`) keeps this a valid override no matter which
+  // side of the mixin wins linearization. `super.munitFixtures` is statically `Seq[AnyFixture[_]]`
+  // from this trait's own perspective (it doesn't know about the backend suite it's mixed with),
+  // but is always actually `Seq[IOFixture[_]]` at the concrete call site, so the cast is safe.
+  override def munitFixtures: Seq[IOFixture[_]] =
+    super.munitFixtures.asInstanceOf[Seq[IOFixture[_]]] :+ seedFixture
 }

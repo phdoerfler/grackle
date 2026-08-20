@@ -17,7 +17,14 @@ package grackle.sql.test
 
 import grackle.syntax._
 
-trait SqlEmbeddingMapping[F[_]] extends SqlTestMapping[F] {
+trait SqlEmbeddingMapping[F[_]] extends SqlTestData[F] {
+
+  def seedData: List[F[Unit]] =
+    List(
+      seedTable(films, "embedding/films.csv"),
+      seedTable(series, "embedding/series.csv"),
+      seedTable(episodes, "embedding/episodes2.csv")
+    )
 
   object films extends TableDef("films") {
     val title = col("title", text)
