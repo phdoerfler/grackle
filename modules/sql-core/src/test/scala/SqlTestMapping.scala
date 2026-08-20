@@ -52,7 +52,10 @@ trait SqlTestMapping[F[_]] extends SqlMappingLike[F] { outer =>
   def nullable[T](c: TestCodec[T]): TestCodec[T]
   def list[T: CDecoder: CEncoder](c: TestCodec[T]): TestCodec[List[T]]
 
-  final case class SeedColumn(name: String, columnRef: ColumnRef, decode: String => Any)
+  // A plain class (not a case class): a nested case class in this F-parameterised trait makes
+  // the compiler synthesise an `equals` with an outer-reference type test, which is a fatal
+  // warning under CI. Nothing relies on structural equality here.
+  final class SeedColumn(val name: String, val columnRef: ColumnRef, val decode: String => Any)
 
   private val seedRegistry: mutable.Map[TableName, mutable.LinkedHashMap[String, SeedColumn]] =
     mutable.Map.empty
@@ -66,7 +69,7 @@ trait SqlTestMapping[F[_]] extends SqlMappingLike[F] { outer =>
       cd: CellDecoder[T],
       pos: SourcePos): ColumnRef = {
     val cr = ColumnRef(tableName, colName, codec, typeName.value, pos)
-    val entry = SeedColumn(colName, cr, s => cd.decode(s))
+    val entry = new SeedColumn(colName, cr, s => cd.decode(s))
     seedRegistry.getOrElseUpdate(tableName, mutable.LinkedHashMap.empty).update(colName, entry)
     cr
   }

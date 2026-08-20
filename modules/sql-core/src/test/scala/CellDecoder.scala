@@ -53,6 +53,15 @@ object CellDecoder {
     from { cell =>
       val inner = cell.trim.stripPrefix("{").stripSuffix("}")
       if (inner.isEmpty) Nil
-      else inner.split(",").toList.map(e => d.decode(e.trim))
+      else
+        inner.split(",").toList.map { e =>
+          // Postgres array text quotes elements that need it (e.g. {"drama","comedy"});
+          // strip a single pair of surrounding double quotes before decoding.
+          val t = e.trim
+          val unquoted =
+            if (t.length >= 2 && t.startsWith("\"") && t.endsWith("\"")) t.substring(1, t.length - 1)
+            else t
+          d.decode(unquoted)
+        }
     }
 }

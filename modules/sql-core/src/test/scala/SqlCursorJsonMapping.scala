@@ -26,7 +26,10 @@ import grackle.QueryCompiler._
 import grackle.Value._
 import grackle.syntax._
 
-trait SqlCursorJsonMapping[F[_]] extends SqlTestMapping[F] {
+trait SqlCursorJsonMapping[F[_]] extends SqlTestData[F] {
+
+  def seedData: List[SeedTable] =
+    List(seedTable(brands, "cursor-json/brands.csv"))
 
   object brands extends TableDef("brands") {
     val id = col("id", int4)

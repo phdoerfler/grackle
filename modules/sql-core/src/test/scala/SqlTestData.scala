@@ -17,7 +17,6 @@ package grackle.sql.test
 
 import scala.io.Source
 
-import cats.Monad
 import cats.syntax.all._
 
 /**
@@ -38,7 +37,9 @@ trait SqlTestData[F[_]] extends SqlTestMapping[F] {
   /** A table's delete (truncate) and insert steps, kept separate so `loadAll` can run all
    *  deletes before all inserts and thereby respect foreign keys across a dataset's tables.
    */
-  final case class SeedTable(delete: F[Unit], insert: F[Unit])
+  // Plain class, not a case class: a nested case class in this F-parameterised trait would
+  // synthesise an `equals` with an outer-reference type test (fatal under CI). Not needed here.
+  final class SeedTable(val delete: F[Unit], val insert: F[Unit])
 
   /**
    * Each dataset overrides this with its `seedTable(...)` calls, parent tables first.
@@ -49,7 +50,7 @@ trait SqlTestData[F[_]] extends SqlTestMapping[F] {
    *  then insert every table (parents first). This keeps re-seeding idempotent on a persistent
    *  container without tripping foreign-key constraints.
    */
-  def loadAll(implicit F: Monad[F]): F[Unit] =
+  def loadAll: F[Unit] =
     seedData.reverse.traverse_(_.delete) >> seedData.traverse_(_.insert)
 
   protected def readRows(resourcePath: String): (List[String], List[List[String]]) = {
@@ -62,7 +63,7 @@ trait SqlTestData[F[_]] extends SqlTestMapping[F] {
     } finally src.close()
   }
 
-  def seedTable(table: TableDef, resourcePath: String)(implicit F: Monad[F]): SeedTable = {
+  def seedTable(table: TableDef, resourcePath: String): SeedTable = {
     val tableName = table.tableName
     val cols = seedColumnsFor(tableName)
     val (header, rows) = readRows(resourcePath)
@@ -106,6 +107,6 @@ trait SqlTestData[F[_]] extends SqlTestMapping[F] {
           F0.combine(values, F0.const(")")))
     }
 
-    SeedTable(runCommand(truncate), insertRows.traverse_(runCommand))
+    new SeedTable(runCommand(truncate), insertRows.traverse_(runCommand))
   }
 }

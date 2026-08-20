@@ -16,11 +16,10 @@
 package grackle.sql.test
 
 import cats.effect.IO
-import munit.CatsEffectSuite
 
 import grackle._
 
-trait SqlInterfacesSuite2 extends CatsEffectSuite {
+trait SqlInterfacesSuite2 extends SqlSeedableSuite {
   def mapping: Mapping[IO]
 
   test("when discriminator fails the entire query should fail") {

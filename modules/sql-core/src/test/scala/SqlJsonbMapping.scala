@@ -23,7 +23,10 @@ import grackle.QueryCompiler._
 import grackle.Value._
 import grackle.syntax._
 
-trait SqlJsonbMapping[F[_]] extends SqlTestMapping[F] {
+trait SqlJsonbMapping[F[_]] extends SqlTestData[F] {
+
+  def seedData: List[SeedTable] =
+    List(seedTable(records, "jsonb/records.csv"))
 
   object records extends TableDef("records") {
     val id = col("id", int4)
