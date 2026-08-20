@@ -19,7 +19,7 @@ import grackle.syntax._
 
 trait SqlEmbeddingMapping[F[_]] extends SqlTestData[F] {
 
-  def seedData: List[F[Unit]] =
+  def seedData: List[SeedTable] =
     List(
       seedTable(films, "embedding/films.csv"),
       seedTable(series, "embedding/series.csv"),

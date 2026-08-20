@@ -22,7 +22,7 @@ import grackle.syntax._
 
 trait SqlNullOrderingMapping[F[_]] extends SqlTestData[F] {
 
-  def seedData: List[F[Unit]] =
+  def seedData: List[SeedTable] =
     List(seedTable(nullOrdering, "null-ordering/null_ordering.csv"))
 
   object nullOrdering extends TableDef("null_ordering") {

@@ -22,7 +22,12 @@ import grackle._
 import grackle.Predicate._
 import grackle.syntax._
 
-trait SqlRecursiveInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
+trait SqlRecursiveInterfacesMapping[F[_]] extends SqlTestData[F] { self =>
+
+  def seedData: List[SeedTable] =
+    List(
+      seedTable(items, "recursive-interfaces/recursive_interface_items.csv"),
+      seedTable(nextItems, "recursive-interfaces/recursive_interface_next_items.csv"))
   def itemType: TestCodec[ItemType]
 
   object items extends TableDef("recursive_interface_items") {
@@ -158,6 +163,6 @@ trait SqlRecursiveInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
       }
   }
 
-  implicit val itemTypeCellDecoder: CellDecoder[ItemType] =
+  implicit lazy val itemTypeCellDecoder: CellDecoder[ItemType] =
     CellDecoder.from(s => ItemType.fromInt(s.toInt))
 }

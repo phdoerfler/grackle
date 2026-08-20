@@ -24,7 +24,13 @@ import grackle.QueryCompiler._
 import grackle.Value.{BooleanValue, ObjectValue}
 import grackle.syntax._
 
-trait SqlProjectionMapping[F[_]] extends SqlTestMapping[F] {
+trait SqlProjectionMapping[F[_]] extends SqlTestData[F] {
+
+  def seedData: List[SeedTable] =
+    List(
+      seedTable(level0, "projection/level0.csv"),
+      seedTable(level1, "projection/level1.csv"),
+      seedTable(level2, "projection/level2.csv"))
 
   object level0 extends TableDef("level0") {
     val id = col("id", varchar)

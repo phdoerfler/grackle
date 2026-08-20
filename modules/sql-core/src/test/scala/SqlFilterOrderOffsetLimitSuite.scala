@@ -17,12 +17,11 @@ package grackle.sql.test
 
 import cats.effect.IO
 import io.circe.literal._
-import munit.CatsEffectSuite
 
 import grackle._
 import grackle.test.GraphQLResponseTests.assertWeaklyEqualIO
 
-trait SqlFilterOrderOffsetLimitSuite extends CatsEffectSuite {
+trait SqlFilterOrderOffsetLimitSuite extends SqlSeedableSuite {
   def mapping: Mapping[IO]
 
   test("base query") {

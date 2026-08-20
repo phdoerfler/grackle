@@ -24,7 +24,12 @@ import grackle.QueryCompiler.{Elab, SelectElaborator}
 import grackle.Value.{AbsentValue, NullValue, ObjectValue, StringValue}
 import grackle.syntax._
 
-trait SqlFilterJoinAliasMapping[F[_]] extends SqlTestMapping[F] {
+trait SqlFilterJoinAliasMapping[F[_]] extends SqlTestData[F] {
+
+  def seedData: List[SeedTable] =
+    List(
+      seedTable(episode, "filter-join-alias/episodes3.csv"),
+      seedTable(image, "filter-join-alias/images3.csv"))
 
   object episode extends TableDef("episodes3") {
     val id = col("id", varchar)

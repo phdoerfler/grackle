@@ -25,7 +25,7 @@ import grackle.syntax._
 
 trait SqlSiblingListsData[F[_]] extends SqlTestData[F] {
 
-  def seedData: List[F[Unit]] =
+  def seedData: List[SeedTable] =
     List(
       seedTable(aTable, "sibling-lists/seq_scan_a.csv"),
       seedTable(bTable, "sibling-lists/seq_scan_b.csv"),

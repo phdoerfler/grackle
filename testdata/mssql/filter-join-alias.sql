@@ -10,8 +10,4 @@ CREATE TABLE images3 (
   name VARCHAR(100) NOT NULL
 );
 
-INSERT INTO episodes3 (id, name) VALUES ('a', 'abc');
-
-INSERT INTO images3 (public_url, id, name) VALUES ('test', 'a', 'abc');
-
 GO

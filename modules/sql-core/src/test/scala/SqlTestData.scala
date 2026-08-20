@@ -35,12 +35,22 @@ trait SqlTestData[F[_]] extends SqlTestMapping[F] {
    */
   def runCommand(fragment: Fragment): F[Unit]
 
-  /**
-   * Each dataset overrides this with its `seedTable(...)` calls.
+  /** A table's delete (truncate) and insert steps, kept separate so `loadAll` can run all
+   *  deletes before all inserts and thereby respect foreign keys across a dataset's tables.
    */
-  def seedData: List[F[Unit]]
+  final case class SeedTable(delete: F[Unit], insert: F[Unit])
 
-  def loadAll(implicit F: Monad[F]): F[Unit] = seedData.sequence_
+  /**
+   * Each dataset overrides this with its `seedTable(...)` calls, parent tables first.
+   */
+  def seedData: List[SeedTable]
+
+  /** Delete every table (children first, i.e. reverse of the parent-first `seedData` order),
+   *  then insert every table (parents first). This keeps re-seeding idempotent on a persistent
+   *  container without tripping foreign-key constraints.
+   */
+  def loadAll(implicit F: Monad[F]): F[Unit] =
+    seedData.reverse.traverse_(_.delete) >> seedData.traverse_(_.insert)
 
   protected def readRows(resourcePath: String): (List[String], List[List[String]]) = {
     val full = s"data/$resourcePath"
@@ -52,7 +62,7 @@ trait SqlTestData[F[_]] extends SqlTestMapping[F] {
     } finally src.close()
   }
 
-  def seedTable(table: TableDef, resourcePath: String)(implicit F: Monad[F]): F[Unit] = {
+  def seedTable(table: TableDef, resourcePath: String)(implicit F: Monad[F]): SeedTable = {
     val tableName = table.tableName
     val cols = seedColumnsFor(tableName)
     val (header, rows) = readRows(resourcePath)
@@ -96,6 +106,6 @@ trait SqlTestData[F[_]] extends SqlTestMapping[F] {
           F0.combine(values, F0.const(")")))
     }
 
-    (truncate :: insertRows).traverse_(runCommand)
+    SeedTable(runCommand(truncate), insertRows.traverse_(runCommand))
   }
 }

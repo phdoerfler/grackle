@@ -25,7 +25,7 @@ import grackle.syntax._
 
 trait SqlLikeMapping[F[_]] extends SqlTestData[F] {
 
-  def seedData: List[F[Unit]] =
+  def seedData: List[SeedTable] =
     List(seedTable(likes, "like/likes.csv"))
 
   object likes extends TableDef("likes") {

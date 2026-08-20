@@ -19,7 +19,10 @@ import grackle._
 import grackle.Predicate._
 import grackle.syntax._
 
-trait SqlUnionsMapping[F[_]] extends SqlTestMapping[F] {
+trait SqlUnionsMapping[F[_]] extends SqlTestData[F] {
+
+  def seedData: List[SeedTable] =
+    List(seedTable(collections, "unions/collections.csv"))
 
   object collections extends TableDef("collections") {
     val id = col("id", text)

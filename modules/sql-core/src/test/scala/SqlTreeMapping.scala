@@ -25,7 +25,7 @@ import grackle.syntax._
 
 trait SqlTreeMapping[F[_]] extends SqlTestData[F] {
 
-  def seedData: List[F[Unit]] =
+  def seedData: List[SeedTable] =
     List(seedTable(bintree, "tree/bintree.csv"))
 
   object bintree extends TableDef("bintree") {

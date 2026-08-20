@@ -23,7 +23,12 @@ import grackle.QueryCompiler._
 import grackle.Value._
 import grackle.syntax._
 
-trait SqlGraphMapping[F[_]] extends SqlTestMapping[F] {
+trait SqlGraphMapping[F[_]] extends SqlTestData[F] {
+
+  def seedData: List[SeedTable] =
+    List(
+      seedTable(graphNode, "graph/graph_node.csv"),
+      seedTable(graphEdge, "graph/graph_edge.csv"))
 
   object graphNode extends TableDef("graph_node") {
     val id = col("id", int4)

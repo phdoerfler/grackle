@@ -17,12 +17,11 @@ package grackle.sql.test
 
 import cats.effect.IO
 import io.circe.literal._
-import munit.CatsEffectSuite
 
 import grackle._
 import grackle.test.GraphQLResponseTests.assertWeaklyEqualIO
 
-trait SqlUnionSuite extends CatsEffectSuite {
+trait SqlUnionSuite extends SqlSeedableSuite {
   def mapping: Mapping[IO]
 
   test("simple union query") {

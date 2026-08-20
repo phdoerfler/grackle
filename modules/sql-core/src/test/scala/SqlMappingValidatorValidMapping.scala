@@ -384,8 +384,8 @@ trait SqlMappingValidatorValidMapping[F[_]] extends SqlTestMapping[F] {
       Decoder[String].map(fromString)
   }
 
-  implicit val genreCellDecoder: CellDecoder[Genre] =
+  implicit lazy val genreCellDecoder: CellDecoder[Genre] =
     CellDecoder.from(s => Genre.fromInt(s.toInt))
-  implicit val featureCellDecoder: CellDecoder[Feature] =
+  implicit lazy val featureCellDecoder: CellDecoder[Feature] =
     CellDecoder.from(Feature.fromString)
 }

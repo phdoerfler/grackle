@@ -17,7 +17,16 @@ package grackle.sql.test
 
 import grackle.syntax._
 
-trait SqlNullableParentMapping[F[_]] extends SqlTestMapping[F] {
+trait SqlNullableParentMapping[F[_]] extends SqlTestData[F] {
+
+  def seedData: List[SeedTable] =
+    List(
+      seedTable(aTable, "nullable-parent/nullable_parent_a.csv"),
+      seedTable(bTable, "nullable-parent/nullable_parent_b.csv"),
+      seedTable(cTable, "nullable-parent/nullable_parent_c.csv"),
+      seedTable(dTable, "nullable-parent/nullable_parent_d.csv"),
+      seedTable(eTable, "nullable-parent/nullable_parent_e.csv"),
+      seedTable(fTable, "nullable-parent/nullable_parent_f.csv"))
 
   object aTable extends TableDef("nullable_parent_a") {
     val id = col("id", int4)

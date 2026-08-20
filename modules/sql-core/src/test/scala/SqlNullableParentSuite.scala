@@ -17,7 +17,6 @@ package grackle.sql.test
 
 import cats.effect.IO
 import io.circe.literal._
-import munit.CatsEffectSuite
 
 import grackle._
 import grackle.test.GraphQLResponseTests.assertWeaklyEqualIO
@@ -31,7 +30,7 @@ import grackle.test.GraphQLResponseTests.assertWeaklyEqualIO
  * executing its sub-selections, and a `D` with no `E`s must still be returned with `es` as
  * `[]`.
  */
-trait SqlNullableParentSuite extends CatsEffectSuite {
+trait SqlNullableParentSuite extends SqlSeedableSuite {
   def mapping: Mapping[IO]
 
   test("a nullable field that is absent does not remove its row") {

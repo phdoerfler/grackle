@@ -17,7 +17,12 @@ package grackle.sql.test
 
 import grackle.syntax._
 
-trait SqlCompositeKeyMapping[F[_]] extends SqlTestMapping[F] {
+trait SqlCompositeKeyMapping[F[_]] extends SqlTestData[F] {
+
+  def seedData: List[SeedTable] =
+    List(
+      seedTable(compositeKeyParent, "composite-keys/composite_key_parent.csv"),
+      seedTable(compositeKeyChild, "composite-keys/composite_key_child.csv"))
 
   object compositeKeyParent extends TableDef("composite_key_parent") {
     val key1 = col("key_1", int4)

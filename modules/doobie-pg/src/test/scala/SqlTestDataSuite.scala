@@ -28,7 +28,7 @@ import grackle.syntax._
 trait SqlTestDataFixture[F[_]] extends SqlTestData[F] {
   implicit def F: Applicative[F]
   def runCommand(fragment: Fragment): F[Unit] = F.unit
-  def seedData: List[F[Unit]] = Nil
+  def seedData: List[SeedTable] = Nil
 
   def readRowsForTest(resourcePath: String): (List[String], List[List[String]]) =
     readRows(resourcePath)

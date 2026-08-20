@@ -24,7 +24,12 @@ import grackle.Query._
 import grackle.QueryCompiler._
 import grackle.syntax._
 
-trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
+trait SqlInterfacesMapping[F[_]] extends SqlTestData[F] { self =>
+
+  def seedData: List[SeedTable] =
+    List(
+      seedTable(entities, "interfaces/entities.csv"),
+      seedTable(episodes, "interfaces/episodes.csv"))
 
   def entityType: TestCodec[EntityType]
 
@@ -252,6 +257,6 @@ trait SqlInterfacesMapping[F[_]] extends SqlTestMapping[F] { self =>
       }
   }
 
-  implicit val entityTypeCellDecoder: CellDecoder[EntityType] =
+  implicit lazy val entityTypeCellDecoder: CellDecoder[EntityType] =
     CellDecoder.from(s => EntityType.fromInt(s.toInt))
 }

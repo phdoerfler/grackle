@@ -24,7 +24,13 @@ import grackle.QueryCompiler.{Elab, SelectElaborator}
 import grackle.Value.{AbsentValue, EnumValue, IntValue, NullValue, ObjectValue, StringValue}
 import grackle.syntax._
 
-trait SqlFilterOrderOffsetLimitMapping[F[_]] extends SqlTestMapping[F] {
+trait SqlFilterOrderOffsetLimitMapping[F[_]] extends SqlTestData[F] {
+
+  def seedData: List[SeedTable] =
+    List(
+      seedTable(root, "filter-order-offset-limit/root.csv"),
+      seedTable(listA, "filter-order-offset-limit/lista.csv"),
+      seedTable(listB, "filter-order-offset-limit/listb.csv"))
 
   object root extends TableDef("root") {
     val id = col("id", varchar)
