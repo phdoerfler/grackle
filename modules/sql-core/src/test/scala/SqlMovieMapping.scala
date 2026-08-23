@@ -304,9 +304,9 @@ trait SqlMovieMapping[F[_]] extends SqlTestMapping[F] { self =>
       (0 to 2).flatMap(getTag).toList
     }
 
-    def toInt(tags: List[String]): Int = {
+    def toInt(selected: List[String]): Int = {
       def getBit(m: Int): Int =
-        if (tags.contains(tags(m))) 1 << m else 0
+        if (selected.contains(tags(m))) 1 << m else 0
       (0 to 2).foldLeft(0)((acc, m) => acc | getBit(m))
     }
   }
