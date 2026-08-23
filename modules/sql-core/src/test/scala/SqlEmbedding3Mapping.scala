@@ -17,7 +17,7 @@ package grackle.sql.test
 
 import grackle.syntax._
 
-trait SqlEmbedding3Mapping[F[_]] extends SqlTestMapping[F] {
+trait SqlEmbedding3Mapping[F[_]] extends SqlTestData[F] {
 
   object Bogus extends RootDef {
     val Id = col("<bogus>", varchar)
@@ -27,6 +27,19 @@ trait SqlEmbedding3Mapping[F[_]] extends SqlTestMapping[F] {
     val Pid = col("c_program_id", varchar)
     val Id = col("c_observation_id", varchar)
   }
+
+  // This suite reads the same two tables as the embedding2 suite, and only one of them fills
+  // them — whichever runs first in the JVM (see `SqlTestDataSeeder`). So seed both here too,
+  // including the program table this mapping doesn't otherwise use: observation rows reference
+  // it, so inserting them into an empty database would violate the foreign key.
+  object ProgramTable extends TableDef("t_program") {
+    val Id = col("c_program_id", varchar)
+  }
+
+  def seedData: List[SeedTable] =
+    List(
+      seedTable(ProgramTable, "embedding2/t_program.csv"),
+      seedTable(ObservationTable, "embedding2/t_observation.csv"))
 
   val schema = schema"""
     type Query {

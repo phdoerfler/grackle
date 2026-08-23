@@ -37,10 +37,11 @@ trait SqlTestData[F[_]] extends SqlTestMapping[F] {
   /**
    * A table's delete (truncate) and insert steps, kept separate so `loadAll` can run all
    * deletes before all inserts and thereby respect foreign keys across a dataset's tables.
+   * `key` identifies the table for `SqlTestDataSeeder`'s once-per-JVM bookkeeping.
    */
   // Plain class, not a case class: a nested case class in this F-parameterised trait would
   // synthesise an `equals` with an outer-reference type test (fatal under CI). Not needed here.
-  final class SeedTable(val delete: F[Unit], val insert: F[Unit])
+  final class SeedTable(val key: String, val delete: F[Unit], val insert: F[Unit])
 
   /**
    * Each dataset overrides this with its `seedTable(...)` calls, parent tables first.
@@ -48,12 +49,15 @@ trait SqlTestData[F[_]] extends SqlTestMapping[F] {
   def seedData: List[SeedTable]
 
   /**
-   * Delete every table (children first, i.e. reverse of the parent-first `seedData` order),
-   * then insert every table (parents first). This keeps re-seeding idempotent on a persistent
-   * container without tripping foreign-key constraints.
+   * Fill this mapping's tables, skipping any already filled in this JVM (see
+   * `SqlTestDataSeeder`). Tables still to fill are deleted children-first (the reverse of the
+   * parent-first `seedData` order) and then inserted parents-first, so re-seeding a persistent
+   * container does not trip foreign-key constraints.
    */
-  def loadAll: F[Unit] =
-    seedData.reverse.traverse_(_.delete) >> seedData.traverse_(_.insert)
+  def loadAll: F[Unit] = {
+    val pending = seedData.filter(st => SqlTestDataSeeder.claim(st.key))
+    pending.reverse.traverse_(_.delete) >> pending.traverse_(_.insert)
+  }
 
   protected def readRows(resourcePath: String): (List[String], List[List[String]]) = {
     val full = s"data/$resourcePath"
@@ -109,6 +113,6 @@ trait SqlTestData[F[_]] extends SqlTestMapping[F] {
           F0.combine(values, F0.const(")")))
     }
 
-    new SeedTable(runCommand(truncate), insertRows.traverse_(runCommand))
+    new SeedTable(tableName.name, runCommand(truncate), insertRows.traverse_(runCommand))
   }
 }
