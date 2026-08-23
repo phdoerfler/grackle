@@ -59,7 +59,7 @@ trait SqlWorldMapping[F[_]] extends SqlTestMapping[F] {
   object countrylanguage extends TableDef("countrylanguage") {
     val countrycode = col("countrycode", bpchar(3))
     val language = col("language", nvarchar)
-    val isOfficial = col("isOfficial", bool)
+    val isOfficial = col("isofficial", bool)
     val percentage = col("percentage", float4)
   }
 
