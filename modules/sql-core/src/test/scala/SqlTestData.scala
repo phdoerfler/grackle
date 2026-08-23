@@ -17,8 +17,6 @@ package grackle.sql.test
 
 import scala.io.Source
 
-import cats.syntax.all._
-
 /**
  * Loads shared, backend-agnostic seed data into a table via `SqlTestMapping`'s column registry.
  *
@@ -30,9 +28,14 @@ import cats.syntax.all._
 trait SqlTestData[F[_]] extends SqlTestMapping[F] {
 
   /**
-   * Execute a data-manipulation fragment, discarding results. Backend-specific.
+   * Execute data-manipulation fragments in order, discarding results. Backend-specific.
+   *
+   * Seeding hands a dataset's statements over in one call rather than one at a time, so that a
+   * backend can run them over a single connection and in a single transaction. Doing so is what
+   * makes seeding cheap: a per-statement `transact` opens (and commits, and closes) a
+   * connection for every row, which dominates the cost on small test datasets.
    */
-  def runCommand(fragment: Fragment): F[Unit]
+  def runCommands(fragments: List[Fragment]): F[Unit]
 
   /**
    * A table's delete (truncate) and insert steps, kept separate so `loadAll` can run all
@@ -41,7 +44,7 @@ trait SqlTestData[F[_]] extends SqlTestMapping[F] {
    */
   // Plain class, not a case class: a nested case class in this F-parameterised trait would
   // synthesise an `equals` with an outer-reference type test (fatal under CI). Not needed here.
-  final class SeedTable(val key: String, val delete: F[Unit], val insert: F[Unit])
+  final class SeedTable(val key: String, val delete: Fragment, val inserts: List[Fragment])
 
   /**
    * Each dataset overrides this with its `seedTable(...)` calls, parent tables first.
@@ -56,7 +59,7 @@ trait SqlTestData[F[_]] extends SqlTestMapping[F] {
    */
   def loadAll: F[Unit] = {
     val pending = seedData.filter(st => SqlTestDataSeeder.claim(st.key))
-    pending.reverse.traverse_(_.delete) >> pending.traverse_(_.insert)
+    runCommands(pending.reverse.map(_.delete) ++ pending.flatMap(_.inserts))
   }
 
   protected def readRows(resourcePath: String): (List[String], List[List[String]]) = {
@@ -113,6 +116,6 @@ trait SqlTestData[F[_]] extends SqlTestMapping[F] {
           F0.combine(values, F0.const(")")))
     }
 
-    new SeedTable(tableName.name, runCommand(truncate), insertRows.traverse_(runCommand))
+    new SeedTable(tableName.name, truncate, insertRows)
   }
 }

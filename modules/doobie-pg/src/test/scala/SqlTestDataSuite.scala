@@ -23,11 +23,11 @@ import grackle.syntax._
 
 /**
  * A minimal, standalone-mapping fixture for exercising `SqlTestData`'s pure CSV-parsing logic.
- * No Docker container is needed: `runCommand` is stubbed and never invoked by this suite.
+ * No Docker container is needed: `runCommands` is stubbed and never invoked by this suite.
  */
 trait SqlTestDataFixture[F[_]] extends SqlTestData[F] {
   implicit def F: Applicative[F]
-  def runCommand(fragment: Fragment): F[Unit] = F.unit
+  def runCommands(fragments: List[Fragment]): F[Unit] = F.unit
   def seedData: List[SeedTable] = Nil
 
   def readRowsForTest(resourcePath: String): (List[String], List[List[String]]) =
@@ -69,8 +69,8 @@ final class SqlTestDataSuite extends DoobiePgDatabaseSuite {
   def fixture: DoobiePgTestMapping[IO] with SqlTestDataFixture[IO] =
     new DoobiePgTestMapping[IO](transactor) with SqlTestDataFixture[IO] {
       def F: Applicative[IO] = Applicative[IO]
-      override def runCommand(fragment: Fragment): IO[Unit] =
-        super[SqlTestDataFixture].runCommand(fragment)
+      override def runCommands(fragments: List[Fragment]): IO[Unit] =
+        super[SqlTestDataFixture].runCommands(fragments)
     }
 
   test("readRows splits header and body on |") {

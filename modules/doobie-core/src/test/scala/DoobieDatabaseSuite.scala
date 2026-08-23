@@ -28,8 +28,8 @@ import grackle.sql.test._
 trait DoobieDatabaseSuite extends SqlDatabaseSuite {
   trait DoobieTestMapping[F[_]] extends DoobieMappingLike[F] with SqlTestMapping[F] {
 
-    def runCommand(fragment: Fragment): F[Unit] =
-      fragment.update.run.void.transact(transactor)
+    def runCommands(fragments: List[Fragment]): F[Unit] =
+      fragments.traverse_(_.update.run.void).transact(transactor)
 
     type TestCodec[T] = (Meta[T], Boolean)
 

@@ -65,9 +65,11 @@ trait SkunkDatabaseSuite extends SqlPgDatabaseSuite {
       extends SkunkMapping[F](pool, monitor)
       with SqlTestMapping[F] {
 
-    def runCommand(fragment: Fragment): F[Unit] =
+    def runCommands(fragments: List[Fragment]): F[Unit] =
       pool.use { session =>
-        session.prepare(fragment.fragment.command).flatMap(_.execute(fragment.argument)).void
+        fragments.traverse_ { fragment =>
+          session.prepare(fragment.fragment.command).flatMap(_.execute(fragment.argument)).void
+        }
       }
 
     type TestCodec[T] = (SCodec[T], Boolean)
